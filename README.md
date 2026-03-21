@@ -1,5 +1,5 @@
-# Social Energy Calculator
-
+# Social Energy Calculator 
+# Team Members: Tochi, Eljohn, sadvhic, ada
 Decoupled stack: a **Next.js** frontend (`/frontend`) and a **FastAPI** backend (`/backend`). The UI posts activity details to the API; the API will integrate **Perplexity** (scoring) and **Supabase** (profiles, battery state, history).
 
 ## Architecture
