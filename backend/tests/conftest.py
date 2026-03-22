@@ -221,6 +221,9 @@ async def profile_api_client():
         yield ac, uid
     fastapi_app.dependency_overrides.clear()
     async with eng.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+        )
         await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
         await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
     await eng.dispose()
@@ -236,6 +239,9 @@ async def profile_service_context():
     async with AsyncLocal() as session:
         yield ProfileService(session), uid
     async with eng.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+        )
         await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
         await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
     await eng.dispose()
@@ -255,4 +261,43 @@ async def battery_recalc_session():
         )
         await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
         await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
+    await eng.dispose()
+
+
+@pytest_asyncio.fixture
+async def task_service_session():
+    """TaskService with two user ids for cross-user tests; tears down tasks then related rows."""
+    _skip_if_no_async_db()
+    from app.services.task_service import TaskService
+
+    eng, AsyncLocal, text = _test_async_engine_sessionmaker()
+    uid_a = uuid.uuid4()
+    uid_b = uuid.uuid4()
+    async with AsyncLocal() as session:
+        session.add(
+            Profile(
+                id=uid_a,
+                username=f"ta_{uid_a.hex[:10]}",
+                timezone="UTC",
+                onboarding_completed=False,
+            )
+        )
+        session.add(
+            Profile(
+                id=uid_b,
+                username=f"tb_{uid_b.hex[:10]}",
+                timezone="UTC",
+                onboarding_completed=False,
+            )
+        )
+        await session.commit()
+        yield TaskService(session), uid_a, uid_b
+    async with eng.begin() as conn:
+        for uid in (uid_a, uid_b):
+            await conn.execute(text("DELETE FROM tasks WHERE user_id = :u"), {"u": uid})
+            await conn.execute(
+                text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+            )
+            await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
+            await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
     await eng.dispose()
