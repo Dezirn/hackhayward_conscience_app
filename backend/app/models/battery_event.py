@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
@@ -5,15 +7,16 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Enum as SAEnum,
     ForeignKey,
     Integer,
-    String,
     Text,
     Uuid,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.enums import BatteryEventSourceType
 from app.db.base import Base
 
 if TYPE_CHECKING:
@@ -21,14 +24,10 @@ if TYPE_CHECKING:
 
 
 class BatteryEvent(Base):
-    """A logged change to a user's social battery."""
-
     __tablename__ = "battery_events"
     __table_args__ = (
-        CheckConstraint(
-            "source_type IN ('task', 'recharge', 'daily_bonus')",
-            name="ck_battery_events_source_type",
-        ),
+        CheckConstraint("battery_before >= 0", name="ck_battery_events_before_nonneg"),
+        CheckConstraint("battery_after >= 0", name="ck_battery_events_after_nonneg"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -39,10 +38,16 @@ class BatteryEvent(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("profiles.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
-    source_type: Mapped[str] = mapped_column(
-        String(32),
+    source_type: Mapped[BatteryEventSourceType] = mapped_column(
+        SAEnum(
+            BatteryEventSourceType,
+            name="battery_event_source_type",
+            native_enum=True,
+            values_callable=lambda s: [e.value for e in s],
+        ),
         nullable=False,
     )
     source_id: Mapped[Optional[uuid.UUID]] = mapped_column(

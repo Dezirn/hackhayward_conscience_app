@@ -2,12 +2,19 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.db.utils import postgres_connect_args
 from app.db.base import Base
 
-from app.models import BatteryEvent, Profile  # noqa: F401
+from app.models import (  # noqa: F401
+    Battery,
+    BatteryEvent,
+    Profile,
+    RechargeEntry,
+    Task,
+)
 
 config = context.config
 
@@ -42,7 +49,7 @@ def run_migrations_online() -> None:
     url = get_url()
     connectable = create_engine(
         url,
-        poolclass=pool.NullPool,
+        poolclass=NullPool,
         connect_args=postgres_connect_args(url),
     )
 

@@ -67,6 +67,17 @@ alembic revision --autogenerate -m "describe change"   # after you add SQLAlchem
 alembic upgrade head
 ```
 
+Phase 2 adds revision **`2c4f8a1e9b0d`**, which **drops** the old minimal `profiles` / `battery_events` tables and recreates the full social-battery schema (destructive if you had data there).
+
+**Backend tests (PostgreSQL):** from `backend/` with `DATABASE_URL` in `.env` (or override with `TEST_DATABASE_URL`):
+
+```bash
+pip install -r requirements.txt
+pytest tests/
+```
+
+Optional end-to-end Alembic cycle test (downgrade to `94815aa61fda` then upgrade to head): set **`RUN_ALEMBIC_CYCLE_TESTS=1`** (can be disruptive on a shared DB).
+
 If you ever pasted a live key into a tracked file, **rotate it** in the Supabase dashboard and update your local `.env` only.
 
 ### Frontend
