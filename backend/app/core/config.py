@@ -16,6 +16,10 @@ class Settings(BaseSettings):
 
     database_url: str = ""
 
+    # Asyncpg: when DATABASE_URL implies TLS, default to relaxed cert verify (hosted poolers).
+    # Set DATABASE_SSL_STRICT=1 or DATABASE_SSL_RELAXED=0 for strict verification.
+    database_ssl_relaxed: bool = True
+
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Predefined “logged-in” user for demos until real auth exists.

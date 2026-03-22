@@ -3,8 +3,34 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+_ENV_PATH = _BACKEND_ROOT / ".env"
+
+
+def _prime_backend_dotenv_into_environ() -> None:
+    """Expose backend/.env keys to os.environ so asyncpg and Settings agree (pydantic does not export .env to os)."""
+    if not _ENV_PATH.is_file():
+        return
+    for raw in _ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        os.environ[key] = val
+
+
+_prime_backend_dotenv_into_environ()
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -131,3 +157,85 @@ def make_battery_event(profile: Profile, **kwargs) -> BatteryEvent:
 @pytest.fixture
 def inspector(engine):
     return inspect(engine)
+
+
+def _skip_if_no_async_db():
+    if not database_url():
+        pytest.skip("Set DATABASE_URL or TEST_DATABASE_URL for async API tests")
+
+
+def _test_async_engine_sessionmaker():
+    """Per-fixture async engine (avoids global engine bound to a different event loop)."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from app.db.utils import asyncpg_connect_kwargs, to_async_database_url
+
+    url = database_url()
+    assert url
+    async_url = to_async_database_url(url)
+    settings = get_settings()
+    eng = create_async_engine(
+        async_url,
+        poolclass=NullPool,
+        connect_args=asyncpg_connect_kwargs(
+            url, ssl_relaxed=settings.database_ssl_relaxed
+        ),
+    )
+    factory = async_sessionmaker(
+        eng,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+    return eng, factory, text
+
+
+@pytest_asyncio.fixture
+async def profile_api_client():
+    _skip_if_no_async_db()
+    import httpx
+    from httpx import ASGITransport
+
+    from app.deps.demo_user import demo_user_id_dep
+    from app.main import app as fastapi_app
+
+    eng, AsyncLocal, text = _test_async_engine_sessionmaker()
+    uid = uuid.uuid4()
+
+    async def over_demo() -> uuid.UUID:
+        return uid
+
+    async def over_session():
+        async with AsyncLocal() as session:
+            yield session
+
+    from app.db.async_session import get_async_session
+
+    fastapi_app.dependency_overrides[demo_user_id_dep] = over_demo
+    fastapi_app.dependency_overrides[get_async_session] = over_session
+    transport = ASGITransport(app=fastapi_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac, uid
+    fastapi_app.dependency_overrides.clear()
+    async with eng.begin() as conn:
+        await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
+        await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
+    await eng.dispose()
+
+
+@pytest_asyncio.fixture
+async def profile_service_context():
+    _skip_if_no_async_db()
+    from app.services.profile_service import ProfileService
+
+    eng, AsyncLocal, text = _test_async_engine_sessionmaker()
+    uid = uuid.uuid4()
+    async with AsyncLocal() as session:
+        yield ProfileService(session), uid
+    async with eng.begin() as conn:
+        await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
+        await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
+    await eng.dispose()
