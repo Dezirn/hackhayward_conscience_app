@@ -1,23 +1,34 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.enums import BatteryEventSourceType, TaskStatus
 from app.models.battery import Battery
 from app.models.battery_event import BatteryEvent
 from app.models.profile import Profile
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
+from app.services.ai_client import AIClient, AIClientError
 from app.services.battery_service import BatteryService
 from app.services.task_lifecycle_errors import (
     BatteryNotFoundError,
     InvalidTaskStateError,
     ProfileNotFoundError,
 )
+
+logger = logging.getLogger(__name__)
+
+# Matches fallback magnitude domain: drain in [-40, -1]
+_TASK_DELTA_MIN = -40
+_TASK_DELTA_MAX = -1
+
+_AI_REASONING_MAX_LEN = 8000
 
 # Fields that trigger recomputation of estimated_battery_delta on update
 _ESTIMATION_FIELD_NAMES = frozenset(
@@ -48,13 +59,102 @@ def estimate_fallback_battery_delta(difficulty: int, duration_minutes: int) -> i
     return -magnitude
 
 
+def _should_try_task_ai() -> bool:
+    s = get_settings()
+    if not (s.perplexity_api_key or "").strip():
+        return False
+    return s.ai_provider.strip().lower() == "perplexity"
+
+
+def _sanitize_task_battery_delta(raw: float | int) -> int:
+    """Normalize AI delta to a negative integer in [_TASK_DELTA_MIN, _TASK_DELTA_MAX]."""
+    v = int(round(float(raw)))
+    if v > 0:
+        v = -v
+    if v == 0:
+        v = -1
+    if v < _TASK_DELTA_MIN:
+        v = _TASK_DELTA_MIN
+    if v > _TASK_DELTA_MAX:
+        v = _TASK_DELTA_MAX
+    return v
+
+
+def _sanitize_ai_score(raw: float | None) -> float | None:
+    if raw is None:
+        return None
+    x = float(raw)
+    if x < 0.0:
+        return 0.0
+    if x > 1.0:
+        return 1.0
+    return x
+
+
+def _sanitize_ai_reasoning(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    return s[:_AI_REASONING_MAX_LEN]
+
+
+async def _resolve_task_estimation(
+    *,
+    title: str,
+    description: str,
+    difficulty: int,
+    duration_minutes: int,
+    priority: int,
+    due_at: datetime | None,
+) -> tuple[int, float | None, str | None]:
+    """
+    AI-first task drain estimate; deterministic fallback on missing config or any AI failure.
+    Returns (estimated_battery_delta, ai_score, ai_reasoning).
+    """
+    fb = estimate_fallback_battery_delta(difficulty, duration_minutes)
+    if not _should_try_task_ai():
+        return fb, None, None
+
+    try:
+        client = AIClient()
+        out = await client.estimate_task(
+            title=title,
+            description=description,
+            difficulty=difficulty,
+            duration_minutes=duration_minutes,
+            priority=priority,
+            due_at=due_at,
+        )
+        delta = _sanitize_task_battery_delta(out.estimated_battery_delta)
+        score = _sanitize_ai_score(out.ai_score)
+        reasoning = _sanitize_ai_reasoning(out.ai_reasoning)
+        return delta, score, reasoning
+    except AIClientError as e:
+        logger.info("Task estimation: AI failed, using fallback (%s)", e)
+        return fb, None, None
+    except Exception as e:
+        logger.warning(
+            "Task estimation: unexpected error, using fallback (%s)",
+            e,
+            exc_info=True,
+        )
+        return fb, None, None
+
+
 class TaskService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
     async def create_task(self, user_id: UUID, payload: TaskCreate) -> Task:
-        delta = estimate_fallback_battery_delta(
-            payload.difficulty, payload.duration_minutes
+        delta, ai_score, ai_reasoning = await _resolve_task_estimation(
+            title=payload.title,
+            description=payload.description,
+            difficulty=payload.difficulty,
+            duration_minutes=payload.duration_minutes,
+            priority=payload.priority,
+            due_at=payload.due_at,
         )
         task = Task(
             user_id=user_id,
@@ -66,8 +166,8 @@ class TaskService:
             due_at=payload.due_at,
             status=TaskStatus.pending,
             estimated_battery_delta=delta,
-            ai_score=None,
-            ai_reasoning=None,
+            ai_score=ai_score,
+            ai_reasoning=ai_reasoning,
             recommended_order=None,
         )
         self.session.add(task)
@@ -116,9 +216,17 @@ class TaskService:
             task.due_at = data["due_at"]
 
         if recompute:
-            task.estimated_battery_delta = estimate_fallback_battery_delta(
-                task.difficulty, task.duration_minutes
+            delta, ai_score, ai_reasoning = await _resolve_task_estimation(
+                title=task.title,
+                description=task.description,
+                difficulty=task.difficulty,
+                duration_minutes=task.duration_minutes,
+                priority=task.priority,
+                due_at=task.due_at,
             )
+            task.estimated_battery_delta = delta
+            task.ai_score = ai_score
+            task.ai_reasoning = ai_reasoning
 
         task.updated_at = datetime.now(timezone.utc)
         await self.session.flush()

@@ -2,6 +2,7 @@ alembic
 asyncpg
 fastapi
 greenlet
+httpx
 psycopg2-binary
 pydantic
 pydantic-settings
