@@ -4,10 +4,10 @@
 
 **HackHayward 2026 Team: A-Set**
 
-- Eljohn
-- Sadhvik
-- Tochi
 - Ada
+- Sadhvik
+- Eljohn
+- Tochi
 
 ---
 
