@@ -6,9 +6,18 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import TaskStatus
+from app.core.enums import BatteryEventSourceType, TaskStatus
+from app.models.battery import Battery
+from app.models.battery_event import BatteryEvent
+from app.models.profile import Profile
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
+from app.services.battery_service import BatteryService
+from app.services.task_lifecycle_errors import (
+    BatteryNotFoundError,
+    InvalidTaskStateError,
+    ProfileNotFoundError,
+)
 
 # Fields that trigger recomputation of estimated_battery_delta on update
 _ESTIMATION_FIELD_NAMES = frozenset(
@@ -124,3 +133,83 @@ class TaskService:
         await self.session.delete(task)
         await self.session.commit()
         return True
+
+    async def complete_task(self, user_id: UUID, task_id: UUID) -> Task | None:
+        task = await self.get_task(user_id, task_id)
+        if task is None:
+            return None
+        if task.status != TaskStatus.pending:
+            raise InvalidTaskStateError(
+                f"Cannot complete task with status {task.status.value!r}; expected pending.",
+                current_status=task.status,
+            )
+
+        profile = await self.session.get(Profile, user_id)
+        if profile is None:
+            raise ProfileNotFoundError(
+                "Profile not found for this user; cannot complete task."
+            )
+
+        result = await self.session.execute(
+            select(Battery).where(Battery.user_id == user_id)
+        )
+        battery = result.scalar_one_or_none()
+        if battery is None:
+            raise BatteryNotFoundError(
+                "Battery not found for this user; cannot complete task."
+            )
+
+        now = datetime.now(timezone.utc)
+        await BatteryService.recalculate_battery(
+            self.session, battery, profile.timezone, now
+        )
+
+        battery_before = battery.current_level
+        tentative = battery_before + task.estimated_battery_delta
+        battery_after = BatteryService.clamp_level(
+            tentative, battery.min_level, battery.max_level
+        )
+        battery.current_level = battery_after
+        battery.status_label = BatteryService.get_status_label(
+            battery_after, battery.max_level
+        )
+        battery.updated_at = now
+
+        self.session.add(
+            BatteryEvent(
+                user_id=user_id,
+                source_type=BatteryEventSourceType.task,
+                source_id=task.id,
+                delta=task.estimated_battery_delta,
+                battery_before=battery_before,
+                battery_after=battery_after,
+                explanation="Task completed",
+            )
+        )
+
+        task.status = TaskStatus.completed
+        task.updated_at = now
+
+        await self.session.flush()
+        await self.session.commit()
+        await self.session.refresh(task)
+        return task
+
+    async def skip_task(self, user_id: UUID, task_id: UUID) -> Task | None:
+        task = await self.get_task(user_id, task_id)
+        if task is None:
+            return None
+        if task.status != TaskStatus.pending:
+            raise InvalidTaskStateError(
+                f"Cannot skip task with status {task.status.value!r}; expected pending.",
+                current_status=task.status,
+            )
+
+        now = datetime.now(timezone.utc)
+        task.status = TaskStatus.skipped
+        task.updated_at = now
+
+        await self.session.flush()
+        await self.session.commit()
+        await self.session.refresh(task)
+        return task

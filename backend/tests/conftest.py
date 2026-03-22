@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -290,6 +290,56 @@ async def task_service_session():
                 onboarding_completed=False,
             )
         )
+        await session.commit()
+        yield TaskService(session), uid_a, uid_b
+    async with eng.begin() as conn:
+        for uid in (uid_a, uid_b):
+            await conn.execute(text("DELETE FROM tasks WHERE user_id = :u"), {"u": uid})
+            await conn.execute(
+                text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+            )
+            await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
+            await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
+    await eng.dispose()
+
+
+@pytest_asyncio.fixture
+async def task_lifecycle_session():
+    """Two users with profiles, batteries, and TaskService (for complete/skip lifecycle tests)."""
+    _skip_if_no_async_db()
+    from app.services.task_service import TaskService
+
+    eng, AsyncLocal, text = _test_async_engine_sessionmaker()
+    uid_a = uuid.uuid4()
+    uid_b = uuid.uuid4()
+    seed = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    async with AsyncLocal() as session:
+        for uid, uname in (
+            (uid_a, f"tl_{uid_a.hex[:10]}"),
+            (uid_b, f"tl_{uid_b.hex[:10]}"),
+        ):
+            session.add(
+                Profile(
+                    id=uid,
+                    username=uname,
+                    timezone="UTC",
+                    onboarding_completed=False,
+                )
+            )
+            session.add(
+                Battery(
+                    user_id=uid,
+                    current_level=50,
+                    min_level=0,
+                    max_level=100,
+                    baseline_level=70,
+                    daily_bonus=5,
+                    recharge_rate_per_hour=2.0,
+                    last_recalculated_at=seed,
+                    last_daily_bonus_date=date(2025, 6, 1),
+                    status_label="okay",
+                )
+            )
         await session.commit()
         yield TaskService(session), uid_a, uid_b
     async with eng.begin() as conn:

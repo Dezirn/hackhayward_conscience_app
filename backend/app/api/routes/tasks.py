@@ -11,6 +11,11 @@ from app.db.async_session import get_async_session
 from app.deps.demo_user import DemoUserId
 from app.models.profile import Profile
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.services.task_lifecycle_errors import (
+    BatteryNotFoundError,
+    InvalidTaskStateError,
+    ProfileNotFoundError,
+)
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -73,6 +78,60 @@ async def patch_task(
     service: Annotated[TaskService, Depends(get_task_service)],
 ) -> TaskRead:
     task = await service.update_task(user_id, task_id, body)
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found.",
+        )
+    return TaskRead.model_validate(task)
+
+
+@router.post("/{task_id}/complete", response_model=TaskRead)
+async def complete_task_route(
+    task_id: UUID,
+    user_id: DemoUserId,
+    service: Annotated[TaskService, Depends(get_task_service)],
+) -> TaskRead:
+    try:
+        task = await service.complete_task(user_id, task_id)
+    except InvalidTaskStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ProfileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found. Call POST /profile/bootstrap first.",
+        ) from None
+    except BatteryNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Battery not found for this user.",
+        ) from None
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found.",
+        )
+    return TaskRead.model_validate(task)
+
+
+@router.post("/{task_id}/skip", response_model=TaskRead)
+async def skip_task_route(
+    task_id: UUID,
+    user_id: DemoUserId,
+    service: Annotated[TaskService, Depends(get_task_service)],
+) -> TaskRead:
+    try:
+        task = await service.skip_task(user_id, task_id)
+    except InvalidTaskStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
     if task is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
