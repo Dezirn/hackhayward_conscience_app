@@ -239,3 +239,20 @@ async def profile_service_context():
         await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
         await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
     await eng.dispose()
+
+
+@pytest_asyncio.fixture
+async def battery_recalc_session():
+    """Isolated async session + user id for battery recalc tests; cleans events then battery then profile."""
+    _skip_if_no_async_db()
+    eng, AsyncLocal, text = _test_async_engine_sessionmaker()
+    uid = uuid.uuid4()
+    async with AsyncLocal() as session:
+        yield session, uid
+    async with eng.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+        )
+        await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
+        await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
+    await eng.dispose()
