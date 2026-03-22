@@ -131,17 +131,20 @@ export function DashboardPage() {
       <SceneLayout
         topLeft={
           <div>
-            <h1 className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
-              Social Battery
+            <p className="font-sans text-xs font-semibold text-accent-cyan">
+              Dashboard
+            </p>
+            <h1 className="font-display mt-2 text-2xl font-semibold tracking-tight text-fg-primary sm:text-3xl">
+              Your orbit
             </h1>
             {profile ? (
-              <p className="mt-2 text-sm text-zinc-400">
-                <span className="text-zinc-600">Signed in as</span>{" "}
-                <span className="font-medium text-zinc-200">
+              <p className="mt-3 font-sans text-sm leading-relaxed text-fg-secondary sm:text-base">
+                <span className="text-fg-muted">Operator</span>{" "}
+                <span className="font-semibold text-fg-primary">
                   {profile.username}
                 </span>
                 {profile.display_name ? (
-                  <span className="text-zinc-600">
+                  <span className="text-fg-muted">
                     {" "}
                     · {profile.display_name}
                   </span>
@@ -176,15 +179,18 @@ export function DashboardPage() {
               onCompleteTask={taskActions.handleCompleteTask}
               onSkipTask={taskActions.handleSkipTask}
             />
-            <div className="border-t border-white/[0.06] pt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-600">
-                Recent energy events
+            <div className="border-t border-white/[0.06] pt-6">
+              <h3 className="font-display text-base font-semibold tracking-tight text-fg-primary">
+                Energy log
               </h3>
-              <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-zinc-800/80 bg-zinc-950/40">
-                <BatteryHistory events={batteryHistory} />
+              <p className="mt-1 font-sans text-sm leading-relaxed text-fg-secondary">
+                Recent shifts from tasks, recharge, and bonuses.
+              </p>
+              <div className="mt-4 max-h-52 overflow-y-auto rounded-xl border border-white/[0.06] bg-black/20 shadow-inner">
+                <BatteryHistory events={batteryHistory} embedded />
               </div>
             </div>
-            <p className="border-t border-white/[0.04] pt-4 text-center font-mono text-[0.65rem] text-zinc-600">
+            <p className="border-t border-white/[0.05] pt-4 text-center font-mono text-[0.6875rem] text-fg-subtle">
               API {apiBase}
             </p>
           </BottomLanePlaceholder>

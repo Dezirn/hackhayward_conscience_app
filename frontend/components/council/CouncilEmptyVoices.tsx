@@ -1,9 +1,13 @@
 export function CouncilEmptyVoices() {
   return (
-    <div className="rounded-2xl border border-dashed border-white/[0.1] bg-zinc-950/30 px-6 py-16 text-center backdrop-blur-sm sm:py-20">
-      <div className="mx-auto flex max-w-md flex-col items-center gap-4">
+    <div className="relative overflow-hidden rounded-2xl border border-dashed border-violet-500/20 bg-gradient-to-b from-zinc-950/40 to-violet-950/10 px-6 py-16 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm sm:py-20">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_0%,rgba(139,92,246,0.08),transparent)]"
+        aria-hidden
+      />
+      <div className="relative mx-auto flex max-w-md flex-col items-center gap-5">
         <div
-          className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-zinc-900/60 text-zinc-500"
+          className="flex h-16 w-16 items-center justify-center rounded-2xl border border-accent-violet/35 bg-accent-violet/10 text-accent-violet shadow-[0_0_40px_-12px_rgba(174,140,255,0.35)]"
           aria-hidden
         >
           <svg
@@ -24,10 +28,10 @@ export function CouncilEmptyVoices() {
           </svg>
         </div>
         <div>
-          <p className="text-sm font-medium text-zinc-300">
-            The chamber is quiet
+          <p className="font-display text-base font-semibold tracking-tight text-fg-primary">
+            The chamber awaits your motion
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+          <p className="mt-3 font-sans text-sm leading-relaxed text-fg-secondary">
             Pose a decision above and convene the council. Five voices will
             answer—then you&apos;ll see a single synthesis you can act on.
           </p>

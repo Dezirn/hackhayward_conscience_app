@@ -3,13 +3,32 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Cosmic UI tokens (Conscience) */
+  --cosmic-void: #04040f;
+  --cosmic-navy: #0a0f24;
+  --cosmic-cyan: #22d3ee;
+  --cosmic-cyan-dim: rgba(34, 211, 238, 0.35);
+  --cosmic-violet: #8b5cf6;
+  --cosmic-teal: #2dd4bf;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-geist-sans), ui-sans-serif,
+    system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Conscience text system — intentional hierarchy on cosmic dark UI */
+  --color-fg-primary: #f4f7ff;
+  --color-fg-secondary: #b5bed3;
+  --color-fg-muted: #7e879e;
+  --color-fg-subtle: #616a82;
+  --color-accent-cyan: #7be7ff;
+  --color-accent-violet: #ae8cff;
+  --color-accent-amber: #ffbe5c;
+  --color-accent-mint: #67e8b5;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,8 +40,73 @@
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--color-fg-primary);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Typography roles (pair with Tailwind font-sans / font-display) */
+.type-overline {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-fg-subtle);
+}
+
+/* —— Hero vessel motion —— */
+@keyframes vessel-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes vessel-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes liquid-slosh {
+  0% {
+    transform: translateX(-1.5%) skewX(-0.6deg) scaleY(1);
+  }
+  100% {
+    transform: translateX(1.5%) skewX(0.4deg) scaleY(1.01);
+  }
+}
+
+@keyframes liquid-shimmer {
+  0% {
+    transform: translateX(-120%) skewX(-12deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateX(120%) skewX(-12deg);
+    opacity: 0;
+  }
+}
+
+@keyframes rim-shine {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 @keyframes council-rise {
@@ -36,13 +120,93 @@ body {
   }
 }
 
+@keyframes council-seat-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+    opacity: 0.72;
+  }
+  50% {
+    box-shadow: 0 0 24px -4px rgba(34, 211, 238, 0.22);
+    opacity: 1;
+  }
+}
+
+@keyframes council-seat-active {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes assistant-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
 .council-rise {
   animation: council-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.energy-vessel-float {
+  animation: vessel-float 5.5s ease-in-out infinite;
+}
+
+.energy-vessel-glow {
+  animation: vessel-glow-pulse var(--vessel-glow-dur, 3.5s) ease-in-out infinite;
+}
+
+.energy-liquid-slosh {
+  animation: liquid-slosh var(--liquid-slosh-dur, 3.2s) ease-in-out infinite
+    alternate;
+}
+
+.energy-liquid-shimmer {
+  animation: liquid-shimmer var(--liquid-shimmer-dur, 4.2s) ease-in-out infinite;
+}
+
+.energy-rim-shine {
+  animation: rim-shine var(--rim-shine-dur, 2.8s) ease-in-out infinite;
+}
+
+.council-seat-idle {
+  animation: council-seat-breathe var(--seat-breathe-dur, 3.6s) ease-in-out
+    infinite;
+}
+
+.council-seat-hover:hover,
+.council-seat-hover:focus-visible {
+  animation: council-seat-active 1.8s ease-in-out infinite;
+}
+
+.assistant-signal-dot {
+  animation: assistant-pulse 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .council-rise,
+  .energy-vessel-float,
+  .energy-vessel-glow,
+  .energy-liquid-slosh,
+  .energy-liquid-shimmer,
+  .energy-rim-shine,
+  .council-seat-idle,
+  .assistant-signal-dot {
+    animation: none !important;
+  }
   .council-rise {
-    animation: none;
     opacity: 1;
     transform: none;
   }

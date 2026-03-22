@@ -9,8 +9,7 @@ type SceneLayoutProps = {
 };
 
 /**
- * Full-viewport scene frame: overlay header, centered hero + stats, bottom-anchored lane.
- * Background layers can be added on this container later.
+ * Full-viewport scene: header row, centered hero + metrics, bottom lane with breathing room.
  */
 export function SceneLayout({
   topLeft,
@@ -22,21 +21,21 @@ export function SceneLayout({
   return (
     <div className="relative flex min-h-dvh w-full flex-col">
       <div className="relative z-10 flex min-h-dvh flex-1 flex-col">
-        <header className="flex shrink-0 items-start justify-between gap-4 px-4 pt-6 pb-2 sm:px-8 sm:pt-8">
-          <div className="min-w-0">{topLeft}</div>
-          <div className="shrink-0">{topRight}</div>
+        <header className="flex shrink-0 flex-col gap-4 px-4 pb-2 pt-7 sm:flex-row sm:items-start sm:justify-between sm:px-8 sm:pb-4 sm:pt-10">
+          <div className="min-w-0 max-w-xl">{topLeft}</div>
+          <div className="shrink-0 sm:max-w-md sm:pt-1">{topRight}</div>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col px-4 sm:px-8">
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-6 sm:py-10">
-            <div className="flex w-full max-w-3xl flex-col items-center gap-8">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-4 sm:py-8 md:py-10">
+            <div className="flex w-full max-w-3xl flex-col items-center gap-10 sm:gap-12 md:gap-14">
               {hero}
-              {statsStrip}
+              <div className="w-full max-w-xl">{statsStrip}</div>
             </div>
           </div>
         </div>
 
-        <div className="relative z-10 mt-auto shrink-0 px-4 pb-6 pt-2 sm:px-8 sm:pb-8">
+        <div className="relative z-10 mt-auto shrink-0 px-4 pb-7 pt-4 sm:px-8 sm:pb-10 sm:pt-6">
           {bottomLane}
         </div>
       </div>

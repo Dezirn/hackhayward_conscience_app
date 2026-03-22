@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { Task } from "@/lib/types";
 
 export type TaskCardProps = {
@@ -67,10 +69,38 @@ function deltaOf(task: Task): string {
   return d > 0 ? `+${rounded}` : `-${rounded}`;
 }
 
+function deltaTone(task: Task): string {
+  const d =
+    num(task.estimated_battery_delta) ?? num(task.estimatedBatteryDelta);
+  if (d === null)
+    return "text-fg-muted border-fg-subtle/40 bg-zinc-900/50";
+  if (d > 0)
+    return "text-accent-mint border-accent-mint/35 bg-accent-mint/10";
+  if (d < 0)
+    return "text-rose-200 border-rose-500/35 bg-rose-500/10";
+  return "text-fg-secondary border-fg-subtle/40 bg-zinc-900/50";
+}
+
 function isPending(task: Task): boolean {
   return (
     typeof task.status === "string" &&
     task.status.trim().toLowerCase() === "pending"
+  );
+}
+
+function Chip({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-lg border px-2 py-0.5 font-sans text-[0.6875rem] font-semibold leading-tight tabular-nums ${className}`}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -90,10 +120,9 @@ export function TaskCard({
   const pending = isPending(task);
   const muted = variant === "muted";
 
-  const shell =
-    muted
-      ? "rounded-lg border border-zinc-800/50 bg-zinc-950/25 p-3 ring-1 ring-white/[0.03]"
-      : "rounded-lg border border-zinc-800/90 bg-zinc-950/50 p-4 ring-1 ring-white/5";
+  const shell = muted
+    ? "rounded-xl border border-white/[0.05] bg-zinc-950/30 p-3.5 shadow-none ring-1 ring-inset ring-white/[0.03] transition hover:border-white/[0.07]"
+    : "group rounded-xl border border-cyan-500/10 bg-gradient-to-br from-zinc-900/40 to-zinc-950/80 p-4 shadow-[0_0_40px_-28px_rgba(34,211,238,0.25)] ring-1 ring-inset ring-white/[0.05] transition duration-300 hover:-translate-y-0.5 hover:border-cyan-500/20 hover:shadow-[0_12px_40px_-24px_rgba(34,211,238,0.2)]";
 
   const completeLabel =
     mutating && mutatingAction === "complete"
@@ -108,68 +137,64 @@ export function TaskCard({
         ? "Working…"
         : "Skip";
 
+  const dStr = deltaOf(task);
+  const dClass = deltaTone(task);
+
   return (
     <article className={shell}>
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <h3
-          className={`min-w-0 max-w-full break-words font-medium text-zinc-100 ${
-            muted ? "text-sm" : "text-base"
+          className={`min-w-0 max-w-[85%] break-words font-display font-semibold leading-snug text-fg-primary ${
+            muted ? "text-sm text-fg-muted" : "text-base"
           }`}
         >
           {str(task.title, "Untitled task")}
         </h3>
-        <span className="shrink-0 rounded bg-zinc-800/80 px-2 py-0.5 text-xs font-medium capitalize text-zinc-300">
+        <Chip
+          className={
+            muted
+              ? "shrink-0 border-fg-subtle/50 capitalize text-fg-subtle"
+              : "shrink-0 border-accent-cyan/30 bg-accent-cyan/10 capitalize text-fg-primary"
+          }
+        >
           {statusLabel(task)}
-        </span>
+        </Chip>
       </div>
       <p
-        className={`mt-2 break-words leading-relaxed text-zinc-400 ${
-          muted ? "text-xs" : "text-sm"
+        className={`mt-2.5 break-words font-sans leading-relaxed text-fg-secondary ${
+          muted ? "text-xs text-fg-muted" : "text-sm"
         }`}
       >
         {str(task.description, "No description")}
       </p>
-      <dl
-        className={`mt-3 grid gap-x-3 gap-y-2 text-zinc-500 sm:grid-cols-2 ${
-          muted ? "text-[11px]" : "text-xs"
-        }`}
+
+      <div
+        className={`mt-3 flex flex-wrap gap-2 ${muted ? "opacity-80" : ""}`}
       >
-        <div>
-          <dt className="text-zinc-600">Difficulty</dt>
-          <dd className="tabular-nums text-zinc-300">
-            {num(task.difficulty) ?? "N/A"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-zinc-600">Duration (min)</dt>
-          <dd className="tabular-nums text-zinc-300">
-            {num(task.duration_minutes) ?? num(task.durationMinutes) ?? "N/A"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-zinc-600">Priority</dt>
-          <dd className="tabular-nums text-zinc-300">
-            {num(task.priority) ?? "N/A"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-zinc-600">Est. battery Δ</dt>
-          <dd className="tabular-nums text-zinc-300">{deltaOf(task)}</dd>
-        </div>
+        <Chip className="border-fg-subtle/45 bg-zinc-900/50 text-fg-muted">
+          D{num(task.difficulty) ?? "—"}
+        </Chip>
+        <Chip className="border-fg-subtle/45 bg-zinc-900/50 text-fg-muted">
+          {num(task.duration_minutes) ?? num(task.durationMinutes) ?? "—"}m
+        </Chip>
+        <Chip className="border-fg-subtle/45 bg-zinc-900/50 text-fg-muted">
+          P{num(task.priority) ?? "—"}
+        </Chip>
+        <Chip className={`border ${dClass}`}>Δ {dStr}</Chip>
         {dueOf(task) ? (
-          <div className="sm:col-span-2">
-            <dt className="text-zinc-600">Due</dt>
-            <dd className="break-words text-zinc-300">{dueOf(task)}</dd>
-          </div>
+          <Chip className="border-accent-violet/30 bg-accent-violet/10 text-fg-primary">
+            {dueOf(task)}
+          </Chip>
         ) : null}
-      </dl>
+      </div>
+
       {pending && id.length > 0 ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={mutating}
             onClick={onComplete}
-            className="rounded-lg bg-emerald-600/90 px-3 py-2 text-sm font-medium text-emerald-950 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 font-sans text-sm font-semibold leading-snug text-emerald-950 shadow-[0_0_20px_-6px_rgba(16,185,129,0.5)] transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400/80 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {completeLabel}
           </button>
@@ -177,7 +202,7 @@ export function TaskCard({
             type="button"
             disabled={mutating}
             onClick={onSkip}
-            className="rounded-lg border border-zinc-600 bg-zinc-900/60 px-3 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2 font-sans text-sm font-semibold leading-snug text-fg-secondary transition hover:border-white/25 hover:bg-white/[0.08] hover:text-fg-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {skipLabel}
           </button>

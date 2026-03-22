@@ -44,33 +44,42 @@ export function TaskList({
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <h3 className="text-sm font-semibold text-zinc-300">Tasks</h3>
-        <p className="mt-4 text-sm text-zinc-500">Loading tasks…</p>
+      <div className="py-2">
+        <h3 className="font-display text-base font-semibold tracking-tight text-fg-primary">
+          Tasks
+        </h3>
+        <p className="mt-3 font-sans text-sm text-fg-muted">Loading tasks…</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+    <div className="space-y-8">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-300">Tasks</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          Pending work — complete or skip to update your battery.
-        </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg font-semibold tracking-tight text-fg-primary sm:text-xl">
+              Task queue
+            </h3>
+            <p className="mt-1 max-w-lg font-sans text-sm leading-relaxed text-fg-secondary">
+              Each item carries an energy cost—complete or skip to move your
+              battery.
+            </p>
+          </div>
+        </div>
         {actionError ? (
           <div
-            className="mt-2 flex flex-wrap items-start gap-2 rounded-md border border-red-900/50 bg-red-950/35 px-3 py-2"
+            className="mt-4 flex flex-wrap items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
             role="alert"
           >
-            <p className="min-w-0 flex-1 text-sm text-red-100/95">
+            <p className="min-w-0 flex-1 font-sans text-sm leading-relaxed text-rose-100">
               {actionError}
             </p>
             {onDismissActionError ? (
               <button
                 type="button"
                 onClick={onDismissActionError}
-                className="shrink-0 rounded border border-red-800/80 bg-red-950/50 px-2 py-1 text-xs font-medium text-red-200 hover:bg-red-900/40"
+                className="shrink-0 rounded-lg border border-rose-400/40 bg-rose-950/50 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:bg-rose-900/40"
               >
                 Dismiss
               </button>
@@ -80,15 +89,15 @@ export function TaskList({
       </div>
 
       <div>
-        <h4 className="text-xs font-medium uppercase tracking-wide text-amber-500/90">
-          Pending
+        <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-500/80">
+          Active
         </h4>
         {pending.length === 0 ? (
-          <p className="mt-3 text-sm text-zinc-500">
-            No pending tasks right now.
+          <p className="mt-4 text-sm text-zinc-500">
+            Clear deck—no pending tasks right now.
           </p>
         ) : (
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-4 space-y-4">
             {pending.map((task, i) => {
               const key = taskKey(task, i);
               const id = apiTaskId(task);
@@ -110,14 +119,14 @@ export function TaskList({
       </div>
 
       {other.length > 0 ? (
-        <div className="border-t border-zinc-800/70 pt-5">
-          <h4 className="text-[11px] font-medium uppercase tracking-wide text-zinc-600">
-            Completed / skipped
+        <div className="border-t border-white/[0.06] pt-8">
+          <h4 className="font-sans text-sm font-semibold text-fg-subtle">
+            Archive
           </h4>
-          <p className="mt-1 text-[11px] text-zinc-600">
-            Done items stay visible for reference.
+          <p className="mt-1 font-sans text-sm leading-relaxed text-fg-muted">
+            Completed or skipped—quieter, for reference.
           </p>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-4 space-y-3">
             {other.map((task, i) => (
               <li key={taskKey(task, i)}>
                 <TaskCard task={task} variant="muted" />

@@ -16,7 +16,7 @@ type AppShellProps = {
 /** Full-viewport shell: cosmic canvas under scene UI. */
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="relative flex min-h-dvh w-full flex-col bg-[#04040f] text-zinc-100">
+    <div className="relative flex min-h-dvh w-full flex-col bg-[#04040f] text-fg-primary">
       <SceneBackground />
       {/* Soft vignette for legibility over bright nebula pockets */}
       <div
