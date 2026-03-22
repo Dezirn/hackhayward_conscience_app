@@ -22,35 +22,35 @@ export function CouncilSynthesisPanel({
         aria-hidden
       />
       <div className="relative">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300/80">
+        <p className="font-sans text-xs font-semibold text-accent-violet">
           Synthesis
         </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+        <h2 className="font-display mt-2 text-xl font-semibold tracking-tight text-fg-primary sm:text-2xl">
           What the council converges on
         </h2>
 
         <dl className="mt-8 space-y-8">
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wider text-emerald-400/90">
+            <dt className="font-sans text-sm font-semibold text-accent-mint">
               Consensus
             </dt>
-            <dd className="mt-2 text-sm leading-relaxed text-zinc-200 sm:text-base">
+            <dd className="mt-2 font-sans text-sm leading-relaxed text-fg-secondary sm:text-base">
               {synthesis.consensus}
             </dd>
           </div>
           <div className="border-t border-white/[0.08] pt-8">
-            <dt className="text-xs font-semibold uppercase tracking-wider text-amber-400/90">
+            <dt className="font-sans text-sm font-semibold text-accent-amber">
               Main tension
             </dt>
-            <dd className="mt-2 text-sm leading-relaxed text-zinc-200 sm:text-base">
+            <dd className="mt-2 font-sans text-sm leading-relaxed text-fg-secondary sm:text-base">
               {synthesis.mainTension}
             </dd>
           </div>
           <div className="border-t border-white/[0.08] pt-8">
-            <dt className="text-xs font-semibold uppercase tracking-wider text-cyan-400/90">
+            <dt className="font-sans text-sm font-semibold text-accent-cyan">
               Suggested next step
             </dt>
-            <dd className="mt-2 text-sm leading-relaxed text-zinc-200 sm:text-base">
+            <dd className="mt-2 font-sans text-sm leading-relaxed text-fg-secondary sm:text-base">
               {synthesis.suggestedNextStep}
             </dd>
           </div>

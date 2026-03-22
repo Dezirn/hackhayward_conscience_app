@@ -19,7 +19,7 @@ export function AdvisorCard({
 
   return (
     <article
-      className={`council-rise group relative overflow-hidden rounded-2xl border bg-zinc-950/55 p-5 backdrop-blur-md transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 ${a.border} ${a.shadow}`}
+      className={`council-rise group relative overflow-hidden rounded-2xl border bg-gradient-to-br from-zinc-950/70 to-zinc-950/40 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md transition-[transform,box-shadow,border-color] duration-500 hover:-translate-y-1 hover:border-white/15 ${a.border} ${a.shadow}`}
       style={{ animationDelay: `${animationDelayMs}ms` }}
     >
       <div
@@ -46,16 +46,16 @@ export function AdvisorCard({
         </div>
         <div className="min-w-0 flex-1">
           <header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h3 className="text-base font-semibold text-white">
+            <h3 className="font-display text-base font-semibold text-fg-primary">
               {definition.name}
             </h3>
             <span
-              className={`text-xs font-medium uppercase tracking-wider ${a.labelTint}`}
+              className={`font-sans text-xs font-semibold leading-snug ${a.labelTint}`}
             >
               {definition.roleLabel}
             </span>
           </header>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+          <p className="mt-3 font-sans text-sm leading-relaxed text-fg-secondary">
             {responseText}
           </p>
         </div>
