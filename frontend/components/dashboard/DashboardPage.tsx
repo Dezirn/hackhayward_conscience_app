@@ -6,15 +6,21 @@ import { BatteryCard } from "@/components/battery/BatteryCard";
 import { BatteryHistory } from "@/components/battery/BatteryHistory";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { CreateTaskForm } from "@/components/tasks/CreateTaskForm";
+import { TaskList } from "@/components/tasks/TaskList";
 import {
   ApiError,
   bootstrapProfile,
+  completeTask,
+  createTask,
   getBattery,
   getBatteryHistory,
   getProfile,
+  getTasks,
+  skipTask,
 } from "@/lib/api";
 import { getApiBaseUrl } from "@/lib/config";
-import type { Battery, BatteryEvent, Profile } from "@/lib/types";
+import type { Battery, BatteryEvent, Profile, Task, TaskCreateInput } from "@/lib/types";
 
 function PlaceholderCard({
   title,
@@ -40,29 +46,124 @@ function PlaceholderCard({
 
 type DashboardStatus = "loading" | "error" | "ready";
 
+type TaskMutationKind = "complete" | "skip";
+
+function mutationErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof Error) return e.message;
+  return "Something went wrong. Please try again.";
+}
+
 export function DashboardPage() {
   const [status, setStatus] = useState<DashboardStatus>("loading");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [battery, setBattery] = useState<Battery | null>(null);
   const [batteryHistory, setBatteryHistory] = useState<BatteryEvent[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [mutatingTaskId, setMutatingTaskId] = useState<string | null>(null);
+  const [mutatingTaskAction, setMutatingTaskAction] =
+    useState<TaskMutationKind | null>(null);
+  const [taskActionError, setTaskActionError] = useState<string>("");
+  const [createTaskLoading, setCreateTaskLoading] = useState(false);
+  const [createTaskError, setCreateTaskError] = useState<string>("");
+  const [createFormResetKey, setCreateFormResetKey] = useState(0);
+
+  const refreshAfterTaskMutation = useCallback(async () => {
+    const [b, h, t] = await Promise.all([
+      getBattery(),
+      getBatteryHistory(),
+      getTasks(),
+    ]);
+    setBattery(b);
+    setBatteryHistory(h);
+    setTasks(t);
+  }, []);
+
+  /** Complete or skip one task, then refresh battery, history, and tasks. */
+  const runTaskMutation = useCallback(
+    async (taskId: string, kind: TaskMutationKind) => {
+      setMutatingTaskId(taskId);
+      setMutatingTaskAction(kind);
+      setTaskActionError("");
+      try {
+        if (kind === "complete") {
+          await completeTask(taskId);
+        } else {
+          await skipTask(taskId);
+        }
+        await refreshAfterTaskMutation();
+      } catch (e) {
+        setTaskActionError(mutationErrorMessage(e));
+      } finally {
+        setMutatingTaskId(null);
+        setMutatingTaskAction(null);
+      }
+    },
+    [refreshAfterTaskMutation],
+  );
+
+  const handleCompleteTask = useCallback(
+    (taskId: string) => void runTaskMutation(taskId, "complete"),
+    [runTaskMutation],
+  );
+
+  const handleSkipTask = useCallback(
+    (taskId: string) => void runTaskMutation(taskId, "skip"),
+    [runTaskMutation],
+  );
+
+  const dismissTaskActionError = useCallback(() => {
+    setTaskActionError("");
+  }, []);
+
+  const dismissCreateTaskError = useCallback(() => {
+    setCreateTaskError("");
+  }, []);
+
+  const handleCreateTask = useCallback(async (payload: TaskCreateInput) => {
+    setCreateTaskLoading(true);
+    setCreateTaskError("");
+    try {
+      await createTask(payload);
+      const nextTasks = await getTasks();
+      setTasks(nextTasks);
+      setCreateFormResetKey((k) => k + 1);
+    } catch (e) {
+      const msg = mutationErrorMessage(e);
+      setCreateTaskError(msg);
+      throw e;
+    } finally {
+      setCreateTaskLoading(false);
+    }
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     setStatus("loading");
     setErrorMessage("");
     setErrorDetail(null);
+    setTaskActionError("");
+    setCreateTaskError("");
 
     try {
       await bootstrapProfile();
-      const p = await getProfile();
-      const b = await getBattery();
+      const [p, b, h, t] = await Promise.all([
+        getProfile(),
+        getBattery(),
+        getBatteryHistory(),
+        getTasks(),
+      ]);
       setProfile(p);
       setBattery(b);
+      setBatteryHistory(h);
+      setTasks(t);
       setStatus("ready");
     } catch (e) {
       setProfile(null);
       setBattery(null);
+      setBatteryHistory([]);
+      setTasks([]);
       setStatus("error");
       if (e instanceof ApiError) {
         setErrorMessage(e.message);
@@ -144,14 +245,27 @@ export function DashboardPage() {
         <BatteryHistory events={batteryHistory} />
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <PlaceholderCard
-          title="Tasks"
-          description="Task list, create, complete, and skip will wire up in a later phase."
-        >
-          <div className="h-24 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/60" />
-        </PlaceholderCard>
+      <div className="flex flex-col gap-4">
+        <CreateTaskForm
+          onSubmit={handleCreateTask}
+          loading={createTaskLoading}
+          error={createTaskError || null}
+          onDismissError={dismissCreateTaskError}
+          resetKey={createFormResetKey}
+        />
+        <TaskList
+          tasks={tasks}
+          loading={false}
+          mutatingTaskId={mutatingTaskId}
+          mutatingTaskAction={mutatingTaskAction}
+          actionError={taskActionError || null}
+          onDismissActionError={dismissTaskActionError}
+          onCompleteTask={handleCompleteTask}
+          onSkipTask={handleSkipTask}
+        />
+      </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
         <PlaceholderCard
           title="Recharge"
           description="Reflection analyze/commit flows will connect in a later phase."
@@ -170,7 +284,7 @@ export function DashboardPage() {
       </div>
 
       <p className="text-center text-xs text-zinc-600">
-        Tasks and recharge are placeholders — next up.
+        Recharge is still a placeholder — tasks are live.
       </p>
     </div>
   );
