@@ -151,6 +151,26 @@ class AIClient:
         except ValidationError as e:
             raise AIResponseValidationError(str(e)) from e
 
+    async def generate_council_decision_raw(
+        self,
+        question: str,
+        context: str,
+    ) -> dict[str, Any]:
+        """
+        Single Perplexity chat completion; response text must be one JSON object.
+        Parsed dict is normalized in council_fallback.parse_and_normalize_council_response.
+        """
+        self._ensure_perplexity_ready()
+        ctx_block = context.strip() if context.strip() else "(none provided)"
+        prompt = _COUNCIL_DECISION_PROMPT.format(
+            question=question.strip(),
+            context=ctx_block,
+        )
+        data = await self._complete_json_object(prompt)
+        if not isinstance(data, dict):
+            raise AIResponseParseError("Council model output is not a JSON object")
+        return data
+
 
 def _assistant_text_from_payload(payload: Any) -> str:
     if not isinstance(payload, dict):
@@ -215,4 +235,52 @@ Reflection:
 - description: {description!r}
 - feeling_text: {feeling_text!r}
 - duration_minutes: {duration_minutes} (null if unknown)
+"""
+
+
+_COUNCIL_DECISION_PROMPT = """You are a decision council: five advisors respond to the user's dilemma, then you synthesize.
+
+User question:
+{question!r}
+
+Additional context:
+{context!r}
+
+Return ONLY one JSON object. No markdown fences, no commentary before or after the JSON.
+
+The JSON MUST include:
+1) "question" — echo the user's question verbatim (string).
+2) "advisors" — array of exactly 5 objects, each with:
+   - "id": one of optimist | skeptic | pragmatist | empath | strategist (lowercase)
+   - "response": string, 2–4 short paragraphs OR 4–7 tight sentences of practical advice in plain language
+3) "synthesis" — object with:
+   - "consensus": string — where the five largely agree (one short paragraph)
+   - "tension": string — main trade-off or disagreement (one short paragraph)
+   - "suggested_next_step": string — one concrete action this week (one short paragraph)
+
+Voice rules (must sound different; disagree when natural; no cartoon roleplay):
+- optimist: credible upside, opportunities, what could go right
+- skeptic: risks, blind spots, what to verify, failure modes
+- pragmatist: next steps, constraints, alignment, reversible experiments, timeboxes
+- empath: feelings, fairness, trust, stakeholders (grounded, not melodramatic)
+- strategist: longer arc, optionality, second-order effects over months/years
+
+Avoid generic platitudes duplicated across voices. Ground every point in this specific dilemma.
+
+Example shape (replace content):
+{{
+  "question": "...",
+  "advisors": [
+    {{"id": "optimist", "response": "..."}},
+    {{"id": "skeptic", "response": "..."}},
+    {{"id": "pragmatist", "response": "..."}},
+    {{"id": "empath", "response": "..."}},
+    {{"id": "strategist", "response": "..."}}
+  ],
+  "synthesis": {{
+    "consensus": "...",
+    "tension": "...",
+    "suggested_next_step": "..."
+  }}
+}}
 """

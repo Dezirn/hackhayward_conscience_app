@@ -55,8 +55,8 @@ export function useRechargeFlow(
     [],
   );
 
-  const handleCommitRecharge = useCallback(async () => {
-    if (!rechargeCommitPayload) return;
+  const handleCommitRecharge = useCallback(async (): Promise<boolean> => {
+    if (!rechargeCommitPayload) return false;
     setRechargeCommitLoading(true);
     setRechargeCommitError("");
     try {
@@ -65,8 +65,10 @@ export function useRechargeFlow(
       setRechargeCommitPayload(null);
       setRechargePreview(null);
       setRechargeFormResetKey((k) => k + 1);
+      return true;
     } catch (e) {
       setRechargeCommitError(mutationErrorMessage(e));
+      return false;
     } finally {
       setRechargeCommitLoading(false);
     }
@@ -87,3 +89,5 @@ export function useRechargeFlow(
     dismissRechargeCommitError,
   };
 }
+
+export type RechargeFlowHandle = ReturnType<typeof useRechargeFlow>;
