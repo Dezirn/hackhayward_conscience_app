@@ -221,6 +221,9 @@ async def profile_api_client():
         yield ac, uid
     fastapi_app.dependency_overrides.clear()
     async with eng.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+        )
         await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
         await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
     await eng.dispose()
@@ -236,6 +239,9 @@ async def profile_service_context():
     async with AsyncLocal() as session:
         yield ProfileService(session), uid
     async with eng.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+        )
         await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
         await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
     await eng.dispose()
