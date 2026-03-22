@@ -43,6 +43,7 @@ class RechargeAnalyzeResponse(BaseModel):
     ai_confidence: Optional[float] = None
     ai_summary: Optional[str] = None
     mood_tags: Optional[list[str]] = None
+    used_fallback: bool = False
 
 
 class RechargeEntryRead(BaseModel):

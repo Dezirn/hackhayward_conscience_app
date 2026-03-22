@@ -9,7 +9,10 @@ from sqlalchemy import func, select, text
 
 from app.core.enums import BatteryEventSourceType
 from app.models import Battery, BatteryEvent, Profile, RechargeEntry
+from app.schemas.ai_outputs import RechargeAnalysisAIOutput
 from app.schemas.recharge import RechargeAnalyzeRequest, RechargeCommitRequest
+from app.services.ai_client import AIClientError
+from app.services import recharge_service as recharge_service_module
 from app.services.recharge_service import RechargeService
 from app.services.task_lifecycle_errors import BatteryNotFoundError, ProfileNotFoundError
 
@@ -19,7 +22,7 @@ from tests.conftest import _skip_if_no_async_db, _test_async_engine_sessionmaker
 @pytest.mark.asyncio
 async def test_analyze_recharge_returns_structured_output(recharge_service_session):
     svc, uid = recharge_service_session
-    out = svc.analyze_recharge(
+    out = await svc.analyze_recharge(
         uid,
         RechargeAnalyzeRequest(
             description="Walked outside",
@@ -37,11 +40,11 @@ async def test_analyze_recharge_returns_structured_output(recharge_service_sessi
 @pytest.mark.asyncio
 async def test_analyze_recharge_uses_duration_and_keywords(recharge_service_session):
     svc, uid = recharge_service_session
-    minimal = svc.analyze_recharge(
+    minimal = await svc.analyze_recharge(
         uid,
         RechargeAnalyzeRequest(description="x", feeling_text="y"),
     )
-    strong = svc.analyze_recharge(
+    strong = await svc.analyze_recharge(
         uid,
         RechargeAnalyzeRequest(
             description="I meditated and felt peaceful, relaxed, and grounded.",
@@ -62,7 +65,7 @@ async def test_analyze_recharge_clamps_to_maximum(recharge_service_session):
         ]
         * 5
     )
-    out = svc.analyze_recharge(
+    out = await svc.analyze_recharge(
         uid,
         RechargeAnalyzeRequest(
             description=wall,
@@ -76,7 +79,7 @@ async def test_analyze_recharge_clamps_to_maximum(recharge_service_session):
 @pytest.mark.asyncio
 async def test_analyze_recharge_has_minimum_positive_delta(recharge_service_session):
     svc, uid = recharge_service_session
-    out = svc.analyze_recharge(
+    out = await svc.analyze_recharge(
         uid,
         RechargeAnalyzeRequest(
             description="work was awful",
@@ -146,7 +149,7 @@ async def test_commit_recharge_recalculates_battery_before_applying_delta(
         feeling_text="okay",
         duration_minutes=None,
     )
-    preview = svc.analyze_recharge(uid, payload)
+    preview = await svc.analyze_recharge(uid, payload)
     delta = preview.ai_estimated_delta
 
     with patch("app.services.recharge_service.datetime") as mock_dt:
@@ -160,23 +163,38 @@ async def test_commit_recharge_recalculates_battery_before_applying_delta(
 @pytest.mark.asyncio
 async def test_commit_recharge_clamps_battery_at_max(recharge_service_session):
     svc, uid = recharge_service_session
+    fixed = datetime(2025, 8, 1, 12, 0, 0, tzinfo=timezone.utc)
     bat = (
         await svc.session.execute(select(Battery).where(Battery.user_id == uid))
     ).scalar_one()
+    bat.last_recalculated_at = fixed
+    bat.last_daily_bonus_date = fixed.date()
     bat.current_level = 98
     await svc.session.commit()
     await svc.session.refresh(bat)
 
-    await svc.commit_recharge(
-        uid,
-        RechargeCommitRequest(
-            description="amazing nap calm peaceful rested energized refreshed grounded focused clear good better okay",
-            feeling_text="less overwhelmed less anxious and very relaxed",
-            duration_minutes=120,
-        ),
-    )
+    with patch("app.services.recharge_service.datetime") as mock_dt:
+        mock_dt.now.return_value = fixed
+        await svc.commit_recharge(
+            uid,
+            RechargeCommitRequest(
+                description="amazing nap calm peaceful rested energized refreshed grounded focused clear good better okay",
+                feeling_text="less overwhelmed less anxious and very relaxed",
+                duration_minutes=120,
+            ),
+        )
     await svc.session.refresh(bat)
     assert bat.current_level == bat.max_level
+
+    ev = (
+        await svc.session.execute(
+            select(BatteryEvent).where(
+                BatteryEvent.user_id == uid,
+                BatteryEvent.source_type == BatteryEventSourceType.recharge,
+            )
+        )
+    ).scalar_one()
+    assert ev.delta == bat.max_level - 98
 
 
 @pytest.mark.asyncio
@@ -209,12 +227,11 @@ async def test_commit_recharge_creates_recharge_event_with_correct_before_after(
         )
     ).scalar_one()
     assert ev.source_id == entry.id
-    assert ev.delta == entry.ai_estimated_delta
+    assert ev.delta == ev.battery_after - ev.battery_before
     bat_final = (
         await svc.session.execute(select(Battery).where(Battery.user_id == uid))
     ).scalar_one()
     assert ev.battery_before == 55
-    assert ev.battery_after == min(55 + ev.delta, bat_final.max_level)
     assert ev.battery_after == bat_final.current_level
 
 
@@ -232,7 +249,7 @@ async def test_commit_recharge_does_not_mutate_db_on_analyze_only(recharge_servi
     ).scalar_one()
     level0 = bat.current_level
 
-    svc.analyze_recharge(
+    await svc.analyze_recharge(
         uid,
         RechargeAnalyzeRequest(description="read", feeling_text="focused"),
     )
@@ -310,7 +327,7 @@ async def test_commit_recharge_uses_server_side_analysis_not_client_guess(
         description="Client cannot send a fake delta in this API shape.",
         feeling_text="Feeling good and calm.",
     )
-    preview = svc.analyze_recharge(uid, payload)
+    preview = await svc.analyze_recharge(uid, payload)
     entry, _ = await svc.commit_recharge(uid, payload)
     assert entry.ai_estimated_delta == preview.ai_estimated_delta
     assert entry.ai_confidence == preview.ai_confidence
@@ -346,3 +363,135 @@ async def test_commit_recharge_persists_transactionally(recharge_service_session
             assert n == 1
     finally:
         await eng.dispose()
+
+
+@pytest.mark.asyncio
+async def test_analyze_recharge_ai_positive_delta_success(
+    recharge_service_session, monkeypatch: pytest.MonkeyPatch
+):
+    class _FakeAI:
+        async def analyze_recharge(self, **kwargs):
+            return RechargeAnalysisAIOutput(
+                ai_estimated_delta=12.0,
+                ai_confidence=0.82,
+                ai_summary="Model summary",
+                mood_tags=["calm"],
+            )
+
+    monkeypatch.setattr(recharge_service_module, "_should_try_recharge_ai", lambda: True)
+    monkeypatch.setattr(
+        recharge_service_module,
+        "AIClient",
+        lambda *a, **kw: _FakeAI(),
+    )
+    svc, uid = recharge_service_session
+    out = await svc.analyze_recharge(
+        uid,
+        RechargeAnalyzeRequest(description="a", feeling_text="b"),
+    )
+    assert out.used_fallback is False
+    assert out.ai_estimated_delta == 12
+    assert out.ai_summary == "Model summary"
+
+
+@pytest.mark.asyncio
+async def test_analyze_recharge_ai_non_positive_delta_falls_back(
+    recharge_service_session, monkeypatch: pytest.MonkeyPatch
+):
+    class _FakeAI:
+        async def analyze_recharge(self, **kwargs):
+            return RechargeAnalysisAIOutput(
+                ai_estimated_delta=-5.0,
+                ai_confidence=0.9,
+                ai_summary="bad",
+                mood_tags=[],
+            )
+
+    monkeypatch.setattr(recharge_service_module, "_should_try_recharge_ai", lambda: True)
+    monkeypatch.setattr(
+        recharge_service_module,
+        "AIClient",
+        lambda *a, **kw: _FakeAI(),
+    )
+    svc, uid = recharge_service_session
+    payload = RechargeAnalyzeRequest(description="a", feeling_text="b")
+    expected = recharge_service_module._compute_fallback_analysis(payload).delta
+    out = await svc.analyze_recharge(uid, payload)
+    assert out.used_fallback is True
+    assert out.ai_estimated_delta == expected
+
+
+@pytest.mark.asyncio
+async def test_analyze_recharge_ai_client_error_falls_back(
+    recharge_service_session, monkeypatch: pytest.MonkeyPatch
+):
+    class _FakeAI:
+        async def analyze_recharge(self, **kwargs):
+            raise AIClientError("provider down")
+
+    monkeypatch.setattr(recharge_service_module, "_should_try_recharge_ai", lambda: True)
+    monkeypatch.setattr(
+        recharge_service_module,
+        "AIClient",
+        lambda *a, **kw: _FakeAI(),
+    )
+    svc, uid = recharge_service_session
+    payload = RechargeAnalyzeRequest(description="x", feeling_text="y")
+    expected = recharge_service_module._compute_fallback_analysis(payload).delta
+    out = await svc.analyze_recharge(uid, payload)
+    assert out.used_fallback is True
+    assert out.ai_estimated_delta == expected
+
+
+@pytest.mark.asyncio
+async def test_commit_recharge_battery_event_delta_is_applied_not_proposed(
+    recharge_service_session, monkeypatch: pytest.MonkeyPatch
+):
+    """When clamp hits max, entry keeps proposed delta; event records actual gain."""
+
+    class _FakeAI:
+        async def analyze_recharge(self, **kwargs):
+            return RechargeAnalysisAIOutput(
+                ai_estimated_delta=25.0,
+                ai_confidence=0.7,
+                ai_summary="big",
+                mood_tags=[],
+            )
+
+    monkeypatch.setattr(recharge_service_module, "_should_try_recharge_ai", lambda: True)
+    monkeypatch.setattr(
+        recharge_service_module,
+        "AIClient",
+        lambda *a, **kw: _FakeAI(),
+    )
+    svc, uid = recharge_service_session
+    fixed = datetime(2025, 9, 1, 12, 0, 0, tzinfo=timezone.utc)
+    bat = (
+        await svc.session.execute(select(Battery).where(Battery.user_id == uid))
+    ).scalar_one()
+    bat.last_recalculated_at = fixed
+    bat.last_daily_bonus_date = fixed.date()
+    bat.current_level = 98
+    await svc.session.commit()
+    await svc.session.refresh(bat)
+
+    with patch("app.services.recharge_service.datetime") as mock_dt:
+        mock_dt.now.return_value = fixed
+        entry, bat_out = await svc.commit_recharge(
+            uid,
+            RechargeCommitRequest(description="recharge", feeling_text="great"),
+        )
+    assert entry.ai_estimated_delta == 25
+    assert bat_out.current_level == bat_out.max_level
+
+    ev = (
+        await svc.session.execute(
+            select(BatteryEvent).where(
+                BatteryEvent.user_id == uid,
+                BatteryEvent.source_type == BatteryEventSourceType.recharge,
+            )
+        )
+    ).scalar_one()
+    assert ev.delta == bat_out.max_level - 98
+    assert ev.delta == ev.battery_after - ev.battery_before
+    assert ev.delta != entry.ai_estimated_delta

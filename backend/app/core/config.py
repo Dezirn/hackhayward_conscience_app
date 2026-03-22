@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     # Predefined “logged-in” user for demos until real auth exists.
     demo_user_id: str = "00000000-0000-4000-8000-000000000001"
 
+    # AI (optional at boot; required only when AIClient is invoked)
+    ai_provider: str = "perplexity"
+    perplexity_api_key: str = ""
+    perplexity_base_url: str = "https://api.perplexity.ai"
+    perplexity_model: str = "sonar"
+    perplexity_timeout_seconds: float = 30.0
+
     @property
     def cors_origins_list(self) -> list[str]:
         raw = self.cors_origins.strip()

@@ -33,7 +33,7 @@ async def analyze_recharge_route(
     user_id: DemoUserId,
     service: Annotated[RechargeService, Depends(get_recharge_service)],
 ) -> RechargeAnalyzeResponse:
-    return service.analyze_recharge(user_id, body)
+    return await service.analyze_recharge(user_id, body)
 
 
 @router.post("/commit", response_model=RechargeCommitResponse)

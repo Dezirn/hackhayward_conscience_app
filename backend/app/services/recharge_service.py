@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
@@ -7,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.enums import BatteryEventSourceType
 from app.models.battery import Battery
 from app.models.battery_event import BatteryEvent
@@ -17,8 +20,18 @@ from app.schemas.recharge import (
     RechargeAnalyzeResponse,
     RechargeCommitRequest,
 )
+from app.services.ai_client import AIClient, AIClientError
 from app.services.battery_service import BatteryService
 from app.services.task_lifecycle_errors import BatteryNotFoundError, ProfileNotFoundError
+
+logger = logging.getLogger(__name__)
+
+# Align with fallback estimator: gain points in [1, 25]
+_RECHARGE_DELTA_MIN = 1
+_RECHARGE_DELTA_MAX = 25
+_RECHARGE_SUMMARY_MAX_LEN = 8000
+_RECHARGE_TAG_MAX_LEN = 64
+_RECHARGE_TAGS_MAX_COUNT = 24
 
 # Longest first to reduce double-counting when shorter tokens appear inside longer phrases.
 _POSITIVE_PHRASES: tuple[str, ...] = tuple(
@@ -62,6 +75,73 @@ class _FallbackAnalysis:
     confidence: float
     summary: str
     mood_tags: list[str]
+
+
+@dataclass(frozen=True)
+class _ResolvedRechargeAnalysis:
+    """Sanitized analysis used for analyze response and commit (server recomputed)."""
+
+    delta: int
+    confidence: float | None
+    summary: str | None
+    mood_tags: list[str]
+    used_fallback: bool
+
+
+def _should_try_recharge_ai() -> bool:
+    s = get_settings()
+    if not (s.perplexity_api_key or "").strip():
+        return False
+    return s.ai_provider.strip().lower() == "perplexity"
+
+
+def _normalize_positive_ai_recharge_delta(raw: object) -> int | None:
+    """
+    If the model returns a finite positive number, round to int and clamp to the
+    recharge band. Missing, NaN/inf, non-numeric, zero, or negative → None (caller
+    should use full fallback analysis, not abs() coercion).
+    """
+    try:
+        x = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(x) or x <= 0:
+        return None
+    v = int(round(x))
+    if v < _RECHARGE_DELTA_MIN:
+        return None
+    if v > _RECHARGE_DELTA_MAX:
+        v = _RECHARGE_DELTA_MAX
+    return v
+
+
+def _sanitize_recharge_confidence(raw: float | None) -> float | None:
+    if raw is None:
+        return None
+    x = float(raw)
+    if x < 0.0:
+        return 0.0
+    if x > 1.0:
+        return 1.0
+    return x
+
+
+def _sanitize_recharge_summary(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    return s[:_RECHARGE_SUMMARY_MAX_LEN]
+
+
+def _sanitize_recharge_mood_tags(tags: list[str]) -> list[str]:
+    out: list[str] = []
+    for t in tags[:_RECHARGE_TAGS_MAX_COUNT]:
+        u = str(t).strip().lower()[:_RECHARGE_TAG_MAX_LEN]
+        if u and u not in out:
+            out.append(u)
+    return out
 
 
 def _extract_positive_tags(text_lower: str) -> list[str]:
@@ -140,26 +220,89 @@ def _compute_fallback_analysis(payload: RechargeAnalyzeRequest) -> _FallbackAnal
     )
 
 
+def _fallback_resolved(fb: _FallbackAnalysis) -> _ResolvedRechargeAnalysis:
+    return _ResolvedRechargeAnalysis(
+        delta=fb.delta,
+        confidence=fb.confidence,
+        summary=fb.summary,
+        mood_tags=list(fb.mood_tags),
+        used_fallback=True,
+    )
+
+
+async def _resolve_recharge_analysis(
+    payload: RechargeAnalyzeRequest,
+) -> _ResolvedRechargeAnalysis:
+    """
+    AI-first recharge estimate; deterministic fallback if AI is off or fails.
+    Commit must call this again — never trust a prior client preview for delta.
+    """
+    fb = _compute_fallback_analysis(payload)
+    if not _should_try_recharge_ai():
+        return _fallback_resolved(fb)
+
+    try:
+        client = AIClient()
+        out = await client.analyze_recharge(
+            description=payload.description,
+            feeling_text=payload.feeling_text,
+            duration_minutes=payload.duration_minutes,
+        )
+        norm = _normalize_positive_ai_recharge_delta(out.ai_estimated_delta)
+        if norm is None:
+            logger.info(
+                "Recharge analysis: AI delta invalid or non-positive, using fallback",
+            )
+            return _fallback_resolved(fb)
+        delta = norm
+        conf = _sanitize_recharge_confidence(out.ai_confidence)
+        if conf is None:
+            conf = fb.confidence
+        summary = _sanitize_recharge_summary(out.ai_summary)
+        if summary is None:
+            summary = fb.summary
+        mood = _sanitize_recharge_mood_tags(out.mood_tags)
+        return _ResolvedRechargeAnalysis(
+            delta=delta,
+            confidence=conf,
+            summary=summary,
+            mood_tags=mood,
+            used_fallback=False,
+        )
+    except AIClientError as e:
+        logger.info("Recharge analysis: AI failed, using fallback (%s)", e)
+        return _fallback_resolved(fb)
+    except Exception as e:
+        logger.warning(
+            "Recharge analysis: unexpected error, using fallback (%s)",
+            e,
+            exc_info=True,
+        )
+        return _fallback_resolved(fb)
+
+
 class RechargeService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def analyze_recharge(
+    async def analyze_recharge(
         self, user_id: UUID, payload: RechargeAnalyzeRequest
     ) -> RechargeAnalyzeResponse:
         _ = user_id
-        a = _compute_fallback_analysis(payload)
+        r = await _resolve_recharge_analysis(payload)
         return RechargeAnalyzeResponse(
-            ai_estimated_delta=a.delta,
-            ai_confidence=a.confidence,
-            ai_summary=a.summary,
-            mood_tags=a.mood_tags,
+            ai_estimated_delta=r.delta,
+            ai_confidence=r.confidence,
+            ai_summary=r.summary,
+            mood_tags=r.mood_tags if r.mood_tags else None,
+            used_fallback=r.used_fallback,
         )
 
     async def commit_recharge(
         self, user_id: UUID, payload: RechargeCommitRequest
     ) -> tuple[RechargeEntry, Battery]:
-        analysis = _compute_fallback_analysis(payload)
+        # Server-authoritative: recompute analysis from payload (AI-first + fallback).
+        analysis = await _resolve_recharge_analysis(payload)
 
         profile = await self.session.get(Profile, user_id)
         if profile is None:
@@ -205,12 +348,13 @@ class RechargeService:
         )
         battery.updated_at = now
 
+        applied_delta = battery_after - battery_before
         self.session.add(
             BatteryEvent(
                 user_id=user_id,
                 source_type=BatteryEventSourceType.recharge,
                 source_id=entry.id,
-                delta=analysis.delta,
+                delta=applied_delta,
                 battery_before=battery_before,
                 battery_after=battery_after,
                 explanation="Recharge logged from reflection",
