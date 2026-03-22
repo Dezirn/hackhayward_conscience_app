@@ -1,19 +1,92 @@
-# Social Energy Calculator 
+# Conscience — Social Energy Calculator
 
-Decoupled stack: a **Next.js** frontend (`/frontend`) and a **FastAPI** backend (`/backend`). The UI posts activity details to the API; the API will integrate **Perplexity** (scoring) and **Supabase** (profiles, battery state, history).
+**Conscience** is an AI-powered social battery calculator built for **HackHayward 2026**. It helps users—especially introverts and neurodivergent individuals—quantify, visualize, and manage their social energy to prevent burnout.
 
-## Architecture
+**HackHayward 2026 Team: A-Set**
 
-Request flow (local dev):
+- Eljohn
+- Sadhvik
+- Tochi
+- Ada
 
-1. **Browser** loads the Next.js app on port **3000**.
-2. The user submits the form; the **browser** sends `POST /calculate-energy` to **FastAPI** on **8000** (same machine, different port—not “inside” Next.js).
-3. **FastAPI** calls **Perplexity** for scoring text and reads/writes **Supabase** for profiles, battery state, and logs.
+---
+
+## Local setup (Devpost / judges)
+
+**Prerequisites:** Node.js 18+, npm, and Python 3.10+.
+
+### 1. Environment variables
+
+Create **`backend/.env`** (do not commit this file):
+
+```env
+DATABASE_URL=your_postgres_connection_string
+SUPABASE_JWT_SECRET=your_jwt_secret
+SUPABASE_URL=your_supabase_url
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+PERPLEXITY_API_KEY=your_perplexity_api_key
+PERPLEXITY_BASE_URL=https://api.perplexity.ai
+PERPLEXITY_MODEL=sonar-small-chat
+PERPLEXITY_TIMEOUT_SECONDS=30
+```
+
+Create **`frontend/.env`**:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
+
+Use **placeholders** in documentation; put **real values** only in local `.env` files. If a key was ever committed or shared publicly, **rotate** it in the Supabase / Perplexity dashboards.
+
+### 2. Start the backend
+
+In a terminal from the repo root:
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Database schema (first-time / after pulling migrations)
+alembic upgrade head
+
+# API server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+- **API:** http://127.0.0.1:8000  
+- **Interactive docs (OpenAPI):** http://127.0.0.1:8000/docs  
+- **Health:** http://127.0.0.1:8000/health  
+
+### 3. Start the frontend
+
+In a **second** terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The app runs at **http://localhost:3000**.
+
+---
+
+## Architecture & tech stack
+
+Decoupled stack: a **Next.js** frontend (`/frontend`) and a **FastAPI** backend (`/backend`). The UI talks to the API; the API integrates **Perplexity** (scoring / reasoning) and **Supabase** (Postgres: profiles, battery state, history).
+
+**Request flow (local dev):**
+
+1. The **browser** loads the Next.js app on port **3000**.
+2. The UI calls the **FastAPI** service on **8000** (JSON over HTTP; not “inside” Next.js).
+3. **FastAPI** uses **Perplexity** and reads/writes **Supabase** as needed.
 
 ```text
-┌─────────────────┐     POST JSON      ┌─────────────────┐
+┌─────────────────┐     JSON (HTTP)    ┌─────────────────┐
 │  Next.js (UI)   │ ─────────────────► │  FastAPI        │
-│  localhost:3000 │ ◄───────────────── │  127.0.0.1:8000 │
+│  localhost:3000 │ ◄───────────────── │  0.0.0.0:8000   │
 └─────────────────┘     JSON response  └────────┬────────┘
                                                 │
                         ┌───────────────────────┼───────────────────────┐
@@ -24,68 +97,22 @@ Request flow (local dev):
 
 | Area | Tech | Purpose |
 |------|------|---------|
-| Frontend | Next.js, Tailwind, react-three-fiber, drei | UI, calls API |
+| Frontend | Next.js, Tailwind, react-three-fiber, drei | UI, 3D battery visualization, API calls |
 | Backend | FastAPI, Uvicorn | CORS, AI + DB orchestration |
-| Data | Supabase | Profiles, social battery state, calculation logs |
+| Data | Supabase (Postgres) | Profiles, social battery state, calculation logs |
 
-## Prerequisites
-
-- **Node.js** 18+ and **npm** (for the frontend)
-- **Python** 3.10+ and **pip** (for the backend)
-- Optional: **Supabase** project URL + key when working on DB features (ask the team for project access)
-
-## First-time setup
-
-After cloning:
-Make environment variables in frontend and backend folders with these fields
-Backend Folder:
-DATABASE_URL
-SUPABASE_JWT_SECRET
-SUPABASE_URL
-CORS_ORIGINS
-PERPLEXITY_API_KEY
-PERPLEXITY_BASE_URL
-PERPLEXITY_MODEL
-PERPLEXITY_TIMEOUT_SECONDS
-
-Frontend Folder:
-NEXT_PUBLIC_API_BASE_URL
-
-Make a virtual environment in Backend Folder and run:
-pip install -r requirements.tx
-
-Go to Front end folder and and run:
-npm install
-
-Now run this in Backend to start the server:
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-Now run this in Frontend to start server:
-npm run dev
-
-Make sure that CORS variable matches the frontend server port.
-
-
-## Where to work
-
-| Role | Start here |
-|------|----------------|
-| Frontend | `frontend/app/page.tsx` (3D scene, form, `fetch` to the API) |
-| Backend | `backend/app/main.py`, `backend/app/core/config.py`, `backend/app/db/`, `backend/app/deps/demo_user.py`, `backend/alembic/` |
-| Styles / Tailwind | `frontend/app/globals.css`, Tailwind classes in components |
-
-The default `frontend/README.md` is the stock Next.js blurb; treat **this** file as the project source of truth.
+---
 
 ## API contract (frontend ↔ backend)
 
-The UI sends:
+The frontend uses `NEXT_PUBLIC_API_BASE_URL` and calls paths on the FastAPI app. **Authoritative route list:** open **http://127.0.0.1:8000/docs** while the backend is running.
+
+**Example** JSON shapes (illustrative; exact paths and fields are defined in OpenAPI):
 
 ```http
 POST http://127.0.0.1:8000/calculate-energy
 Content-Type: application/json
 ```
-
-Example body (fields may grow; backend should validate with Pydantic):
 
 ```json
 {
@@ -96,9 +123,7 @@ Example body (fields may grow; backend should validate with Pydantic):
 }
 ```
 
-The frontend displays text from the JSON response if present (`message`, `response`, `text`, `result`, `score`, or `output`), otherwise it shows pretty-printed JSON.
-
-Example response shape you can target:
+**Example response shape** you can target:
 
 ```json
 {
@@ -107,22 +132,49 @@ Example response shape you can target:
 }
 ```
 
-**Implemented today:** `GET /` health check and Supabase client initialization in `main.py`.  
-**To wire the UI:** add `POST /calculate-energy` in `main.py` (and return JSON the UI can show).
+The live app also exposes resources such as `/tasks`, `/battery`, `/recharge`, `/profile`, and `/council`—see `/docs` for request/response models.
+
+---
 
 ## Database (Supabase)
 
 - **Profiles:** personality types and baseline traits  
 - **State:** social battery percentage  
-- **Logs:** history of energy calculations  
+- **Logs:** history of energy-related events  
 
-Ask in the group Discord if you need schema details or access.
+Ask your team for schema details or dashboard access if needed.
+
+---
+
+## Where to work
+
+| Role | Start here |
+|------|------------|
+| Frontend | `frontend/app/` (routes under `(shell)`), `frontend/lib/api.ts` |
+| Backend | `backend/app/main.py`, `backend/app/api/routes/`, `backend/app/core/config.py`, `backend/alembic/` |
+| Styles / Tailwind | `frontend/app/globals.css`, Tailwind in components |
+
+The stock `frontend/README.md` is the default Next.js blurb; **this file** is the project source of truth.
+
+---
 
 ## Contributing
 
-1. Pull latest `main` (or your team branch) before starting.  
-2. Keep backend secrets in `backend/.env` only.  
+1. Pull the latest `main` (or your team branch) before starting.  
+2. Keep secrets in **`backend/.env`** and **`frontend/.env`** only—never commit real keys.  
 3. Run **both** frontend and backend when testing the full flow.  
-4. Small, focused commits and PRs are easier to review during the hackathon.
+4. Prefer small, focused commits and PRs.
 
-Questions: use the team Discord.
+---
+
+## Push the final submission
+
+After local testing, stop servers (**Ctrl+C** in each terminal), then:
+
+```bash
+git add README.md
+git commit -m "docs: finalize README for Devpost"
+git push origin main
+```
+
+Adjust the commit message if you are bundling other files: `git add -A` or `git add` specific paths as appropriate.
