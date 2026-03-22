@@ -1,9 +1,9 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import create_engine, pool
+from sqlalchemy import create_engine
 
-from app.config import get_settings
+from app.core.config import get_settings
 from app.db.utils import postgres_connect_args
 from app.db.base import Base
 

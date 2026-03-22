@@ -1,9 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BACKEND_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -17,12 +18,23 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # Predefined “logged-in” user for demos until real auth exists.
+    demo_user_id: str = "00000000-0000-4000-8000-000000000001"
+
     @property
     def cors_origins_list(self) -> list[str]:
         raw = self.cors_origins.strip()
         if raw == "*":
             return ["*"]
         return [o.strip() for o in raw.split(",") if o.strip()]
+
+    @field_validator("demo_user_id")
+    @classmethod
+    def demo_user_id_must_be_uuid(cls, v: str) -> str:
+        from uuid import UUID
+
+        UUID(v)
+        return v
 
 
 @lru_cache

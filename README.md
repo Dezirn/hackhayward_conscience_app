@@ -54,8 +54,11 @@ Use **placeholders** in docs; use **real values** only in `backend/.env`:
 ```env
 DATABASE_URL=postgresql://...   # Supabase → Settings → Database (URI)
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000   # optional
-# Optional later: SUPABASE_URL, API keys for Perplexity, etc.
+DEMO_USER_ID=00000000-0000-4000-8000-000000000001   # optional; predefined user for Phase 1
+# Optional later: Perplexity keys, etc.
 ```
+
+Phase 1 uses a **demo user** id from settings (`get_demo_user_id()` in `app/deps/demo_user.py`) instead of JWT auth.
 
 FastAPI and **Alembic** read `DATABASE_URL` from `backend/.env`. After changing models, run migrations from `backend/`:
 
@@ -110,7 +113,7 @@ If the UI shows network errors when you click **Calculate Drain**, the backend i
 | Role | Start here |
 |------|----------------|
 | Frontend | `frontend/app/page.tsx` (3D scene, form, `fetch` to the API) |
-| Backend | `backend/app/main.py` (FastAPI), `backend/app/db/` (SQLAlchemy), `backend/alembic/` (migrations) |
+| Backend | `backend/app/main.py`, `backend/app/core/config.py`, `backend/app/db/`, `backend/app/deps/demo_user.py`, `backend/alembic/` |
 | Styles / Tailwind | `frontend/app/globals.css`, Tailwind classes in components |
 
 The default `frontend/README.md` is the stock Next.js blurb; treat **this** file as the project source of truth.
