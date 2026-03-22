@@ -1,20 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 
 import { BatteryCard } from "@/components/battery/BatteryCard";
 import { BatteryHistory } from "@/components/battery/BatteryHistory";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
-import {
-  ApiError,
-  bootstrapProfile,
-  getBattery,
-  getBatteryHistory,
-  getProfile,
-} from "@/lib/api";
+import { RechargeForm } from "@/components/recharge/RechargeForm";
+import { RechargePreview } from "@/components/recharge/RechargePreview";
+import { CreateTaskForm } from "@/components/tasks/CreateTaskForm";
+import { TaskList } from "@/components/tasks/TaskList";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import { useRechargeFlow } from "@/hooks/useRechargeFlow";
+import { useTaskActions } from "@/hooks/useTaskActions";
+import { useTaskCreate } from "@/hooks/useTaskCreate";
 import { getApiBaseUrl } from "@/lib/config";
-import type { Battery, BatteryEvent, Profile } from "@/lib/types";
 
 function PlaceholderCard({
   title,
@@ -38,46 +38,35 @@ function PlaceholderCard({
   );
 }
 
-type DashboardStatus = "loading" | "error" | "ready";
-
 export function DashboardPage() {
-  const [status, setStatus] = useState<DashboardStatus>("loading");
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [battery, setBattery] = useState<Battery | null>(null);
-  const [batteryHistory, setBatteryHistory] = useState<BatteryEvent[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string>("");
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const {
+    profile,
+    battery,
+    batteryHistory,
+    tasks,
+    status,
+    errorMessage,
+    errorDetail,
+    loadDashboard,
+    refreshTasks,
+    refreshAfterTaskMutation,
+    refreshAfterRechargeCommit,
+  } = useDashboardData();
 
-  const loadDashboard = useCallback(async () => {
-    setStatus("loading");
-    setErrorMessage("");
-    setErrorDetail(null);
+  const taskActions = useTaskActions(refreshAfterTaskMutation);
+  const taskCreate = useTaskCreate(refreshTasks);
+  const recharge = useRechargeFlow(refreshAfterRechargeCommit);
 
-    try {
-      await bootstrapProfile();
-      const p = await getProfile();
-      const b = await getBattery();
-      setProfile(p);
-      setBattery(b);
-      setStatus("ready");
-    } catch (e) {
-      setProfile(null);
-      setBattery(null);
-      setStatus("error");
-      if (e instanceof ApiError) {
-        setErrorMessage(e.message);
-        setErrorDetail(
-          typeof e.body === "string" ? e.body : JSON.stringify(e.body),
-        );
-      } else if (e instanceof Error) {
-        setErrorMessage(e.message);
-        setErrorDetail(null);
-      } else {
-        setErrorMessage("Unexpected error");
-        setErrorDetail(null);
-      }
-    }
-  }, []);
+  /** Full reload: clear task list / create errors only (same as pre-refactor). */
+  const loadDashboardAndClearTaskErrors = useCallback(async () => {
+    taskActions.dismissTaskActionError();
+    taskCreate.dismissCreateTaskError();
+    await loadDashboard();
+  }, [
+    loadDashboard,
+    taskActions.dismissTaskActionError,
+    taskCreate.dismissCreateTaskError,
+  ]);
 
   useEffect(() => {
     void loadDashboard();
@@ -95,7 +84,7 @@ export function DashboardPage() {
         title="Could not load dashboard"
         message={errorMessage}
         detail={errorDetail}
-        onRetry={() => void loadDashboard()}
+        onRetry={() => void loadDashboardAndClearTaskErrors()}
       />
     );
   }
@@ -105,7 +94,7 @@ export function DashboardPage() {
       <ErrorState
         title="Incomplete data"
         message="Battery data is missing."
-        onRetry={() => void loadDashboard()}
+        onRetry={() => void loadDashboardAndClearTaskErrors()}
       />
     );
   }
@@ -144,20 +133,47 @@ export function DashboardPage() {
         <BatteryHistory events={batteryHistory} />
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <PlaceholderCard
-          title="Tasks"
-          description="Task list, create, complete, and skip will wire up in a later phase."
-        >
-          <div className="h-24 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/60" />
-        </PlaceholderCard>
+      <div className="flex flex-col gap-4">
+        <CreateTaskForm
+          onSubmit={taskCreate.handleCreateTask}
+          loading={taskCreate.createTaskLoading}
+          error={taskCreate.createTaskError || null}
+          onDismissError={taskCreate.dismissCreateTaskError}
+          resetKey={taskCreate.createFormResetKey}
+        />
+        <TaskList
+          tasks={tasks}
+          loading={false}
+          mutatingTaskId={taskActions.mutatingTaskId}
+          mutatingTaskAction={taskActions.mutatingTaskAction}
+          actionError={taskActions.taskActionError || null}
+          onDismissActionError={taskActions.dismissTaskActionError}
+          onCompleteTask={taskActions.handleCompleteTask}
+          onSkipTask={taskActions.handleSkipTask}
+        />
+      </div>
 
-        <PlaceholderCard
-          title="Recharge"
-          description="Reflection analyze/commit flows will connect in a later phase."
-        >
-          <div className="h-24 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/60" />
-        </PlaceholderCard>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-4">
+          <RechargeForm
+            onAnalyze={recharge.handleAnalyzeRecharge}
+            analyzeLoading={recharge.rechargeAnalyzeLoading}
+            analyzeError={recharge.rechargeAnalyzeError || null}
+            onDismissAnalyzeError={recharge.dismissRechargeAnalyzeError}
+            resetKey={recharge.rechargeFormResetKey}
+          />
+          {recharge.rechargePreview && recharge.rechargeCommitPayload ? (
+            <RechargePreview
+              commitPayload={recharge.rechargeCommitPayload}
+              preview={recharge.rechargePreview}
+              onCommit={recharge.handleCommitRecharge}
+              commitLoading={recharge.rechargeCommitLoading}
+              commitError={recharge.rechargeCommitError || null}
+              onDismissCommitError={recharge.dismissRechargeCommitError}
+              onReset={recharge.resetRechargeFlow}
+            />
+          ) : null}
+        </div>
 
         <PlaceholderCard
           title="API / debug"
@@ -170,7 +186,7 @@ export function DashboardPage() {
       </div>
 
       <p className="text-center text-xs text-zinc-600">
-        Tasks and recharge are placeholders — next up.
+        Single-page dashboard — battery, tasks, and recharge.
       </p>
     </div>
   );

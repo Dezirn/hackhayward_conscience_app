@@ -70,33 +70,93 @@ export interface BatteryEvent {
 /** Response shape for GET /battery/history (plain array). */
 export type BatteryHistoryResponse = BatteryEvent[];
 
+/**
+ * GET /tasks items (and POST complete/skip responses). Snake_case from FastAPI;
+ * optional camelCase aliases for resilience.
+ * The UI treats missing or partial objects safely; `status` is compared case-insensitively.
+ */
 export interface Task {
-  id: string;
-  user_id: string;
+  id?: string;
+  user_id?: string;
+  title?: string;
+  description?: string;
+  difficulty?: number;
+  duration_minutes?: number;
+  durationMinutes?: number;
+  priority?: number;
+  due_at?: ISODateTimeString | null;
+  dueAt?: ISODateTimeString | null;
+  status?: TaskStatus | string;
+  estimated_battery_delta?: number;
+  estimatedBatteryDelta?: number;
+  ai_score?: number | null;
+  aiScore?: number | null;
+  ai_reasoning?: string | null;
+  aiReasoning?: string | null;
+  recommended_order?: number | null;
+  recommendedOrder?: number | null;
+  created_at?: ISODateTimeString;
+  createdAt?: ISODateTimeString;
+  updated_at?: ISODateTimeString;
+  updatedAt?: ISODateTimeString;
+}
+
+/**
+ * POST /tasks body (FastAPI `TaskCreate`). Use snake_case on the wire.
+ * Backend requires non-blank title and description; optional `due_at` must be timezone-aware (ISO with offset/Z).
+ */
+export interface TaskCreateInput {
   title: string;
   description: string;
   difficulty: number;
   duration_minutes: number;
   priority: number;
   due_at?: ISODateTimeString | null;
-  status: TaskStatus;
-  estimated_battery_delta: number;
-  ai_score?: number | null;
-  ai_reasoning?: string | null;
-  recommended_order?: number | null;
-  created_at: ISODateTimeString;
-  updated_at: ISODateTimeString;
 }
 
-export interface RechargeAnalyzeRequest {
+/**
+ * POST /recharge/analyze and POST /recharge/commit body (same shape; server recomputes on commit).
+ * Wire format is snake_case.
+ */
+export interface RechargeAnalyzeInput {
   description: string;
   feeling_text: string;
   duration_minutes?: number | null;
 }
 
+export type RechargeCommitInput = RechargeAnalyzeInput;
+
+/**
+ * POST /recharge/analyze response. Field names may vary slightly as the backend evolves.
+ */
 export interface RechargeAnalyzeResponse {
-  ai_estimated_delta: number;
+  ai_estimated_delta?: number;
+  /** Possible aliases from other API versions */
+  estimated_delta?: number;
+  estimatedDelta?: number;
+  ai_confidence?: number | null;
+  ai_summary?: string | null;
+  explanation?: string | null;
+  ai_reasoning?: string | null;
+  mood_tags?: string[] | null;
+  moodTags?: string[] | null;
+}
+
+export interface RechargeEntryRead {
+  id?: string;
+  user_id?: string;
+  description?: string;
+  feeling_text?: string;
+  duration_minutes?: number | null;
+  ai_estimated_delta?: number;
   ai_confidence?: number | null;
   ai_summary?: string | null;
   mood_tags?: string[] | null;
+  created_at?: ISODateTimeString;
+}
+
+/** POST /recharge/commit */
+export interface RechargeCommitResponse {
+  battery?: Battery;
+  recharge_entry?: RechargeEntryRead;
 }
