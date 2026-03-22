@@ -114,15 +114,49 @@ export interface TaskCreateInput {
   due_at?: ISODateTimeString | null;
 }
 
-export interface RechargeAnalyzeRequest {
+/**
+ * POST /recharge/analyze and POST /recharge/commit body (same shape; server recomputes on commit).
+ * Wire format is snake_case.
+ */
+export interface RechargeAnalyzeInput {
   description: string;
   feeling_text: string;
   duration_minutes?: number | null;
 }
 
+export type RechargeCommitInput = RechargeAnalyzeInput;
+
+/**
+ * POST /recharge/analyze response. Field names may vary slightly as the backend evolves.
+ */
 export interface RechargeAnalyzeResponse {
-  ai_estimated_delta: number;
+  ai_estimated_delta?: number;
+  /** Possible aliases from other API versions */
+  estimated_delta?: number;
+  estimatedDelta?: number;
+  ai_confidence?: number | null;
+  ai_summary?: string | null;
+  explanation?: string | null;
+  ai_reasoning?: string | null;
+  mood_tags?: string[] | null;
+  moodTags?: string[] | null;
+}
+
+export interface RechargeEntryRead {
+  id?: string;
+  user_id?: string;
+  description?: string;
+  feeling_text?: string;
+  duration_minutes?: number | null;
+  ai_estimated_delta?: number;
   ai_confidence?: number | null;
   ai_summary?: string | null;
   mood_tags?: string[] | null;
+  created_at?: ISODateTimeString;
+}
+
+/** POST /recharge/commit */
+export interface RechargeCommitResponse {
+  battery?: Battery;
+  recharge_entry?: RechargeEntryRead;
 }

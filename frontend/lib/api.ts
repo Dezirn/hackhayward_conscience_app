@@ -4,6 +4,10 @@ import type {
   BatteryEvent,
   Profile,
   ProfileBootstrapResponse,
+  RechargeAnalyzeInput,
+  RechargeAnalyzeResponse,
+  RechargeCommitInput,
+  RechargeCommitResponse,
   Task,
   TaskCreateInput,
 } from "./types";
@@ -18,6 +22,13 @@ export class ApiError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+/** Readable message for mutation handlers (ApiError, Error, or unknown). */
+export function mutationErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof Error) return e.message;
+  return "Something went wrong. Please try again.";
 }
 
 export type ApiRequestInit = RequestInit & {
@@ -150,5 +161,35 @@ export async function createTask(payload: TaskCreateInput): Promise<Task> {
   return apiRequest<Task>("/tasks", {
     method: "POST",
     jsonBody,
+  });
+}
+
+function rechargeJsonBody(payload: RechargeAnalyzeInput): Record<string, unknown> {
+  const jsonBody: Record<string, unknown> = {
+    description: payload.description,
+    feeling_text: payload.feeling_text,
+  };
+  const d = payload.duration_minutes;
+  if (d != null && d > 0) {
+    jsonBody.duration_minutes = d;
+  }
+  return jsonBody;
+}
+
+export async function analyzeRecharge(
+  payload: RechargeAnalyzeInput,
+): Promise<RechargeAnalyzeResponse> {
+  return apiRequest<RechargeAnalyzeResponse>("/recharge/analyze", {
+    method: "POST",
+    jsonBody: rechargeJsonBody(payload),
+  });
+}
+
+export async function commitRecharge(
+  payload: RechargeCommitInput,
+): Promise<RechargeCommitResponse> {
+  return apiRequest<RechargeCommitResponse>("/recharge/commit", {
+    method: "POST",
+    jsonBody: rechargeJsonBody(payload),
   });
 }
