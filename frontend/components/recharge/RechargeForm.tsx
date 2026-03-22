@@ -10,6 +10,7 @@ export type RechargeFormProps = {
   analyzeError: string | null;
   onDismissAnalyzeError?: () => void;
   resetKey: number;
+  embedded?: boolean;
 };
 
 export function RechargeForm({
@@ -18,6 +19,7 @@ export function RechargeForm({
   analyzeError,
   onDismissAnalyzeError,
   resetKey,
+  embedded = false,
 }: RechargeFormProps) {
   const [description, setDescription] = useState("");
   const [feelingText, setFeelingText] = useState("");
@@ -79,12 +81,21 @@ export function RechargeForm({
 
   const displayError = localError || analyzeError;
 
-  return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-      <h3 className="text-sm font-semibold text-zinc-300">Recharge</h3>
-      <p className="mt-1 text-xs text-zinc-500">
-        Log a reflection — analyze to preview the boost, then commit to apply it.
-      </p>
+  const body = (
+    <>
+      {!embedded ? (
+        <>
+          <h3 className="text-sm font-semibold text-zinc-300">Recharge</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Log a reflection — analyze to preview the boost, then commit to
+            apply it.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-zinc-500">
+          Describe your break, analyze for a preview, then commit to apply.
+        </p>
+      )}
 
       {displayError ? (
         <div
@@ -175,6 +186,16 @@ export function RechargeForm({
           {analyzeLoading ? "Analyzing…" : "Analyze recharge"}
         </button>
       </form>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-3">{body}</div>;
+  }
+
+  return (
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+      {body}
     </section>
   );
 }

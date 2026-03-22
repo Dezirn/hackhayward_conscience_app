@@ -24,3 +24,38 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes jar-hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes jar-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.jar-hero-animate {
+  animation: jar-hero-float 8s ease-in-out infinite;
+}
+
+.jar-glow-animate {
+  animation: jar-glow-breathe 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jar-hero-animate,
+  .jar-glow-animate {
+    animation: none;
+  }
+}

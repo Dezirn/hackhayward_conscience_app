@@ -1,26 +1,29 @@
+"use client";
+
 import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
+
+const SceneBackground = dynamic(
+  () =>
+    import("@/components/scene/SceneBackground").then((mod) => mod.SceneBackground),
+  { ssr: false, loading: () => null },
+);
 
 type AppShellProps = {
   children: ReactNode;
 };
 
+/** Full-viewport shell: cosmic canvas under scene UI. */
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-zinc-950 text-zinc-100">
-      <header className="border-b border-zinc-800/80 bg-zinc-900/40 px-4 py-5 sm:px-6">
-        <div className="mx-auto w-full max-w-5xl">
-          <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
-            Social Battery
-          </h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Hackathon dashboard — track energy, tasks, and recharge in one place.
-          </p>
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-        {children}
-      </main>
+    <div className="relative flex min-h-dvh w-full flex-col bg-[#04040f] text-zinc-100">
+      <SceneBackground />
+      {/* Soft vignette for legibility over bright nebula pockets */}
+      <div
+        className="pointer-events-none fixed inset-0 z-[1] bg-[radial-gradient(ellipse_85%_70%_at_50%_45%,transparent_0%,rgba(0,0,0,0.42)_100%)]"
+        aria-hidden
+      />
+      <div className="relative z-[2] flex min-h-dvh flex-1 flex-col">{children}</div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ export type RechargePreviewProps = {
   commitError: string | null;
   onDismissCommitError?: () => void;
   onReset: () => void;
+  embedded?: boolean;
 };
 
 function num(v: unknown): number | null {
@@ -53,6 +54,7 @@ export function RechargePreview({
   commitError,
   onDismissCommitError,
   onReset,
+  embedded = false,
 }: RechargePreviewProps) {
   const tags = moodTags(preview);
   const conf = num(preview.ai_confidence);
@@ -60,13 +62,24 @@ export function RechargePreview({
 
   const handleCommit = () => void onCommit();
 
-  return (
-    <section className="rounded-xl border border-violet-900/40 bg-violet-950/20 p-5 ring-1 ring-violet-500/10">
+  const intro = embedded ? (
+    <p className="text-xs text-zinc-500">
+      Server estimate — commit applies this reflection (re-analyze if you edit
+      fields above).
+    </p>
+  ) : (
+    <>
       <h3 className="text-sm font-semibold text-violet-200">Recharge Preview</h3>
       <p className="mt-1 text-xs text-zinc-500">
         Estimates from the server. Commit applies this reflection using the same
         text you analyzed (edits above won&apos;t apply until you analyze again).
       </p>
+    </>
+  );
+
+  const inner = (
+    <>
+      {intro}
 
       <div className="mt-4 rounded-lg border border-zinc-800/80 bg-zinc-950/50 p-3 text-sm text-zinc-300">
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -163,6 +176,20 @@ export function RechargePreview({
           Start over
         </button>
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="mt-4 space-y-3 border-t border-violet-500/20 pt-4">
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-violet-900/40 bg-violet-950/20 p-5 ring-1 ring-violet-500/10">
+      {inner}
     </section>
   );
 }

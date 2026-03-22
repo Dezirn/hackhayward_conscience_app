@@ -17,6 +17,8 @@ export type CreateTaskFormProps = {
   onDismissError?: () => void;
   /** Increment after a successful create to reset field values. */
   resetKey: number;
+  /** Omit outer card chrome when nested in a modal. */
+  embedded?: boolean;
 };
 
 function rangeOptions(from: number, to: number): number[] {
@@ -31,6 +33,7 @@ export function CreateTaskForm({
   error,
   onDismissError,
   resetKey,
+  embedded = false,
 }: CreateTaskFormProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -109,12 +112,20 @@ export function CreateTaskForm({
 
   const displayError = localError || error;
 
-  return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-      <h3 className="text-sm font-semibold text-zinc-300">New task</h3>
-      <p className="mt-1 text-xs text-zinc-500">
-        Quick add — title required; other fields have sensible defaults.
-      </p>
+  const body = (
+    <>
+      {!embedded ? (
+        <>
+          <h3 className="text-sm font-semibold text-zinc-300">New task</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Quick add — title required; other fields have sensible defaults.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-zinc-500">
+          Title required; other fields default sensibly.
+        </p>
+      )}
 
       {displayError ? (
         <div
@@ -282,6 +293,16 @@ export function CreateTaskForm({
           </button>
         </div>
       </form>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-3">{body}</div>;
+  }
+
+  return (
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+      {body}
     </section>
   );
 }
