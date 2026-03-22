@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { computeBatteryFillPercent } from "@/lib/batteryPercent";
+
 import { BatteryHistory } from "@/components/battery/BatteryHistory";
+import { SocialBatteryCard } from "@/components/battery/SocialBatteryCard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
 import { RechargeModal } from "@/components/recharge/RechargeModal";
 import { BottomLanePlaceholder } from "@/components/scene/BottomLanePlaceholder";
-import { CupHero3D } from "@/components/scene/CupHero3D";
 import { SceneActionButtons } from "@/components/scene/SceneActionButtons";
 import { SceneLayout } from "@/components/scene/SceneLayout";
 import {
@@ -154,7 +156,11 @@ export function DashboardPage() {
             onAddTask={() => setTaskModalOpen(true)}
           />
         }
-        hero={<CupHero3D battery={battery} />}
+        hero={
+          <SocialBatteryCard
+            batteryPercent={computeBatteryFillPercent(battery)}
+          />
+        }
         statsStrip={
           <StatsStripPlaceholder metrics={buildStatsMetrics(battery)} />
         }

@@ -160,3 +160,24 @@ export interface RechargeCommitResponse {
   battery?: Battery;
   recharge_entry?: RechargeEntryRead;
 }
+
+/** POST /council/respond — snake_case from FastAPI. */
+export interface CouncilAdvisorApiItem {
+  id: string;
+  name: string;
+  role: string;
+  response: string;
+}
+
+export interface CouncilSynthesisApi {
+  consensus: string;
+  tension: string;
+  suggested_next_step: string;
+}
+
+export interface CouncilRespondResponse {
+  question: string;
+  advisors: CouncilAdvisorApiItem[];
+  synthesis: CouncilSynthesisApi;
+  used_fallback: boolean;
+}
