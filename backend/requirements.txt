@@ -1,6 +1,8 @@
+alembic
 fastapi
-uvicorn
-supabase
-requests
+psycopg2-binary
 pydantic
+pydantic-settings
 python-dotenv
+sqlalchemy>=2.0
+uvicorn[standard]
