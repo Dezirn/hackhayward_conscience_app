@@ -1,1 +1,6 @@
 .DS_Store
+
+# Python / backend artifacts (if tooling runs from repo root)
+__pycache__/
+*.py[cod]
+.venv/

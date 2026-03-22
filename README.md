@@ -52,12 +52,33 @@ Create **`backend/.env`** on your machine and paste **real** values there. **Do 
 Use **placeholders** in docs; use **real values** only in `backend/.env`:
 
 ```env
-SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-SUPABASE_KEY=your_supabase_anon_or_service_key
-PERPLEXITY_API_KEY=your_perplexity_key
+DATABASE_URL=postgresql://...   # Supabase → Settings → Database (URI)
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000   # optional
+DEMO_USER_ID=00000000-0000-4000-8000-000000000001   # optional; predefined user for Phase 1
+# Optional later: Perplexity keys, etc.
 ```
 
-Variable names must match what `main.py` reads (`SUPABASE_URL`, `SUPABASE_KEY`). If you ever pasted a live key into a tracked file, **rotate that key** in the Supabase (and Perplexity) dashboards and update your local `.env` only.
+Phase 1 uses a **demo user** id from settings (`get_demo_user_id()` in `app/deps/demo_user.py`) instead of JWT auth.
+
+FastAPI and **Alembic** read `DATABASE_URL` from `backend/.env`. After changing models, run migrations from `backend/`:
+
+```bash
+alembic revision --autogenerate -m "describe change"   # after you add SQLAlchemy models
+alembic upgrade head
+```
+
+Phase 2 adds revision **`2c4f8a1e9b0d`**, which **drops** the old minimal `profiles` / `battery_events` tables and recreates the full social-battery schema (destructive if you had data there).
+
+**Backend tests (PostgreSQL):** from `backend/` with `DATABASE_URL` in `.env` (or override with `TEST_DATABASE_URL`):
+
+```bash
+pip install -r requirements.txt
+pytest tests/
+```
+
+Optional end-to-end Alembic cycle test (downgrade to `94815aa61fda` then upgrade to head): set **`RUN_ALEMBIC_CYCLE_TESTS=1`** (can be disruptive on a shared DB).
+
+If you ever pasted a live key into a tracked file, **rotate it** in the Supabase dashboard and update your local `.env` only.
 
 ### Frontend
 
@@ -72,13 +93,18 @@ No `.env` is required for local dev unless you add one (the app currently calls 
 
 Use **two terminals** from the repo root.
 
-**Terminal 1 — API**
+**Terminal 1 — FastAPI**
 
 ```bash
 cd backend
-source venv/bin/activate
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+python3 -m venv .venv && source .venv/bin/activate   # first time only
+pip install -r requirements.txt
+cp .env.example .env   # once; set DATABASE_URL from Supabase
+alembic upgrade head   # apply migrations (baseline is already in repo; safe to re-run)
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+Optional: `python check_supabase.py` (same folder) only tests Postgres without starting the API.
 
 **Terminal 2 — UI**
 
@@ -89,7 +115,7 @@ npm run dev
 
 - **Frontend:** http://localhost:3000  
 - **API docs:** http://127.0.0.1:8000/docs  
-- **Health check:** `GET http://127.0.0.1:8000/` returns JSON confirming the server is up.
+- **Health:** `GET http://127.0.0.1:8000/health` (checks Supabase Postgres with `SELECT 1`)
 
 If the UI shows network errors when you click **Calculate Drain**, the backend is not running or `POST /calculate-energy` is not implemented yet.
 
@@ -98,7 +124,7 @@ If the UI shows network errors when you click **Calculate Drain**, the backend i
 | Role | Start here |
 |------|----------------|
 | Frontend | `frontend/app/page.tsx` (3D scene, form, `fetch` to the API) |
-| Backend | `backend/main.py` (routes, Perplexity, Supabase) |
+| Backend | `backend/app/main.py`, `backend/app/core/config.py`, `backend/app/db/`, `backend/app/deps/demo_user.py`, `backend/alembic/` |
 | Styles / Tailwind | `frontend/app/globals.css`, Tailwind classes in components |
 
 The default `frontend/README.md` is the stock Next.js blurb; treat **this** file as the project source of truth.
