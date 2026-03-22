@@ -351,3 +351,49 @@ async def task_lifecycle_session():
             await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
             await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
     await eng.dispose()
+
+
+@pytest_asyncio.fixture
+async def recharge_service_session():
+    """Profile + battery + RechargeService; tears down recharge_entries then events, batteries, profiles."""
+    _skip_if_no_async_db()
+    from app.services.recharge_service import RechargeService
+
+    eng, AsyncLocal, text = _test_async_engine_sessionmaker()
+    uid = uuid.uuid4()
+    seed = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    async with AsyncLocal() as session:
+        session.add(
+            Profile(
+                id=uid,
+                username=f"rc_{uid.hex[:10]}",
+                timezone="UTC",
+                onboarding_completed=False,
+            )
+        )
+        session.add(
+            Battery(
+                user_id=uid,
+                current_level=50,
+                min_level=0,
+                max_level=100,
+                baseline_level=70,
+                daily_bonus=5,
+                recharge_rate_per_hour=2.0,
+                last_recalculated_at=seed,
+                last_daily_bonus_date=date(2025, 6, 1),
+                status_label="okay",
+            )
+        )
+        await session.commit()
+        yield RechargeService(session), uid
+    async with eng.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM recharge_entries WHERE user_id = :u"), {"u": uid}
+        )
+        await conn.execute(
+            text("DELETE FROM battery_events WHERE user_id = :u"), {"u": uid}
+        )
+        await conn.execute(text("DELETE FROM batteries WHERE user_id = :u"), {"u": uid})
+        await conn.execute(text("DELETE FROM profiles WHERE id = :u"), {"u": uid})
+    await eng.dispose()

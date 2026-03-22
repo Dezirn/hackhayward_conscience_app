@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from sqlalchemy import (
     CheckConstraint,
@@ -57,7 +57,7 @@ class RechargeEntry(Base):
     ai_estimated_delta: Mapped[int] = mapped_column(Integer, nullable=False)
     ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     ai_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    mood_tags: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    mood_tags: Mapped[Optional[List[Any]]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
